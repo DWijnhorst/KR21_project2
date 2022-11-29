@@ -16,27 +16,34 @@ class BNReasoner:
     # TODO: This is where your methods should go
     # returns all variables
 ############################################################################################## Basics for testing
-    def Variables_in_net(self):
-        variables = self.bn.get_all_variables()
-        return variables
-
-    def Get_All_CPTs(self):
-        CPTs = self.bn.get_all_cpts()
-        return CPTs
-
-    def Get_CPT(self, string):
-        CPT = self.bn.get_cpt(string)
-        return CPT
-
-    def Get_network(self):
-        Network = self.bn.get_interaction_graph
-        return Network
-
-    def GetCompatible(self, tuple,  CPT):
-        CompatibleInst = self.bn.get_compatible_instantiations_table(tuple, CPT)
-        return CompatibleInst
+        
+    def Draw(self):
+        self.bn.draw_structure() 
+    
+    
 ############################################################################################# Methods to implement
-    def Network_Pruning(self, query_var, e):
+    def Network_Pruning(self, query_var, e):#not finished
+        #delete outgoing edges from nodes in e
+        for evidence in e:            
+            Outgoing_nodes = self.bn.get_children(evidence[0])
+            for node in Outgoing_nodes:
+                self.bn.del_edge(node)
+        
+        #apply factor reduction (zeroing out the instances that are incompatible with e)
+            for node in Outgoing_nodes:
+                cpt = self.bn.get_cpt(node)
+                self.bn.reduce_factor(evidence, cpt)
+                
+        #delete any leaf nodes that do not appear in Q or e (iteratively)
+            vars = self.bn.get_all_variables()
+            for var in query_var:
+                vars.remove(var)
+            vars.remove(evidence[0])
+            for var in vars:
+                children = self.bn.get_children(var)
+                if len(children) == 0:
+                    self.bn.del_var(var)                
+            
         pass
     #return pruned_network
     def D_separated(self, x,y,z):
@@ -53,7 +60,7 @@ class BNReasoner:
     # return (CPT where x is maxed-out) , (the instantiation of x which led to the maximized value)
     def Factor_Multiplication(self, f, g):
         pass
-    # return h (which is fg)
+    # return h (which is fg)    
     def Ordering(self,set_var):
         pass
     # return good ordering for elimination of set_var basred on min-degree heuristics and min-fill heuristics
@@ -71,17 +78,16 @@ class BNReasoner:
     # return most probable explanation given e
 
 class main():
-
     # Variables
     evidence = True
     Q = "light-on"
     query_var = pd.Series({Q : evidence})
+    
     #Init net
-    NET = BNReasoner("/Users/daanwijnhorst/Documents/GitHub/KR21_project2/testing/dog_problem.BIFXML") #initializing network)
-    #show all CPTs
-    CPT = NET.Get_CPT("light-on")
-    print(CPT)
-    # get compatible CPTs with a tuple given
-    GETCOMPATIBLE = NET.GetCompatible(pd.Series({"light-on" : True, "dog-out" : False}), CPT)
+    NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)
+    
+    #show NET --> works
+    NET.Draw()  
+    
 if __name__ == "__main__":
     main()
