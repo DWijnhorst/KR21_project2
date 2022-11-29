@@ -15,6 +15,7 @@ class BNReasoner:
             self.bn = net
     # TODO: This is where your methods should go
     # returns all variables
+############################################################################################## Basics for testing
     def Variables_in_net(self):
         variables = self.bn.get_all_variables()
         return variables
@@ -34,7 +35,7 @@ class BNReasoner:
     def GetCompatible(self, tuple,  CPT):
         CompatibleInst = self.bn.get_compatible_instantiations_table(tuple, CPT)
         return CompatibleInst
-
+############################################################################################# Methods to implement
     def Network_Pruning(self, query_var, e):
         pass
     #return pruned_network
@@ -70,15 +71,17 @@ class BNReasoner:
     # return most probable explanation given e
 
 class main():
+
+    # Variables
+    evidence = True
+    Q = "light-on"
+    query_var = pd.Series({Q : evidence})
     #Init net
     NET = BNReasoner("/Users/daanwijnhorst/Documents/GitHub/KR21_project2/testing/dog_problem.BIFXML") #initializing network)
-
     #show all CPTs
     CPT = NET.Get_CPT("light-on")
     print(CPT)
-    print(CPT)
     # get compatible CPTs with a tuple given
     GETCOMPATIBLE = NET.GetCompatible(pd.Series({"light-on" : True, "dog-out" : False}), CPT)
-    #print("getcompatible = " , GETCOMPATIBLE)
 if __name__ == "__main__":
     main()
