@@ -12,10 +12,14 @@ class BNReasoner:
             self.bn = BayesNet()
             # Loads the BN from an BIFXML file
             self.bn.load_from_bifxml(net)
+            self.bn.get_all_variables()
         else:
             self.bn = net
-
     # TODO: This is where your methods should go
+    def Variables_in_net(self, ):
+
+
+
     def Network_Pruning(self, query_var, e):
         pass
     #return pruned_network
@@ -50,8 +54,7 @@ class BNReasoner:
         pass
     # return most probable explanation given e
 
-
-
-if __name__ == "__main()__":
-    print('hello world')
-    net = BNReasoner("testing/lecture_example.BIFXML")
+class main():
+    BNReasoner("/Users/daanwijnhorst/Documents/GitHub/KR21_project2/testing/dog_problem.BIFXML") #initializing network)
+if __name__ == "__main__":
+    main()
