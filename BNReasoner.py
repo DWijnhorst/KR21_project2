@@ -1,7 +1,6 @@
 from typing import Union
 from BayesNet import BayesNet
-
-
+import pandas as pd
 class BNReasoner:
     def __init__(self, net: Union[str, BayesNet]):
         """
@@ -12,13 +11,29 @@ class BNReasoner:
             self.bn = BayesNet()
             # Loads the BN from an BIFXML file
             self.bn.load_from_bifxml(net)
-            self.bn.get_all_variables()
         else:
             self.bn = net
     # TODO: This is where your methods should go
-    def Variables_in_net(self, ):
+    # returns all variables
+    def Variables_in_net(self):
+        variables = self.bn.get_all_variables()
+        return variables
 
+    def Get_All_CPTs(self):
+        CPTs = self.bn.get_all_cpts()
+        return CPTs
 
+    def Get_CPT(self, string):
+        CPT = self.bn.get_cpt(string)
+        return CPT
+
+    def Get_network(self):
+        Network = self.bn.get_interaction_graph
+        return Network
+
+    def GetCompatible(self, tuple,  CPT):
+        CompatibleInst = self.bn.get_compatible_instantiations_table(tuple, CPT)
+        return CompatibleInst
 
     def Network_Pruning(self, query_var, e):
         pass
@@ -55,6 +70,15 @@ class BNReasoner:
     # return most probable explanation given e
 
 class main():
-    BNReasoner("/Users/daanwijnhorst/Documents/GitHub/KR21_project2/testing/dog_problem.BIFXML") #initializing network)
+    #Init net
+    NET = BNReasoner("/Users/daanwijnhorst/Documents/GitHub/KR21_project2/testing/dog_problem.BIFXML") #initializing network)
+
+    #show all CPTs
+    CPT = NET.Get_CPT("light-on")
+    print(CPT)
+    print(CPT)
+    # get compatible CPTs with a tuple given
+    GETCOMPATIBLE = NET.GetCompatible(pd.Series({"light-on" : True, "dog-out" : False}), CPT)
+    #print("getcompatible = " , GETCOMPATIBLE)
 if __name__ == "__main__":
     main()
