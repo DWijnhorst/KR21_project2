@@ -22,27 +22,31 @@ class BNReasoner:
     
     
 ############################################################################################# Methods to implement
-    def Network_Pruning(self, query_var, e):#not finished
+    def Network_Pruning(self, query_var, e):
         #delete outgoing edges from nodes in e
-        for evidence in e:            
-            Outgoing_nodes = self.bn.get_children(evidence[0])
+        evidence_vars = e.index.values        
+        for evidence in evidence_vars:            
+            Outgoing_nodes = self.bn.get_children(evidence)
             for node in Outgoing_nodes:
-                self.bn.del_edge(node)
-        
-        #apply factor reduction (zeroing out the instances that are incompatible with e)
-            for node in Outgoing_nodes:
+                self.bn.del_edge((evidence, node)) 
+                        
+                #apply factor reduction (zeroing out the instances that are incompatible with e)
                 cpt = self.bn.get_cpt(node)
-                self.bn.reduce_factor(evidence, cpt)
-                
-        #delete any leaf nodes that do not appear in Q or e (iteratively)
-            vars = self.bn.get_all_variables()
-            for var in query_var:
-                vars.remove(var)
-            vars.remove(evidence[0])
-            for var in vars:
-                children = self.bn.get_children(var)
-                if len(children) == 0:
-                    self.bn.del_var(var)                
+                self.bn.reduce_factor(e, cpt)
+                                
+            #delete any leaf nodes that do not appear in Q or e (iteratively)
+            iteration = 0
+            while iteration == 0 or LeafNodesPresent >= 1:
+                iteration += 1
+                LeafNodesPresent = 0
+                vars = self.bn.get_all_variables()
+                vars.remove(query_var)
+                vars.remove(evidence)
+                for var in vars:
+                    children = self.bn.get_children(var)
+                    if len(children) == 0:                        
+                        LeafNodesPresent += 1 
+                        self.bn.del_var(var) 
             
         pass
     #return pruned_network
@@ -79,15 +83,18 @@ class BNReasoner:
 
 class main():
     # Variables
-    evidence = True
-    Q = "light-on"
-    query_var = pd.Series({Q : evidence})
+    Truth_value = True
+    Var = "dog-out"
+    Evidence = pd.Series({Var : Truth_value})
+    Query_var = "family-out"
     
     #Init net
     NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)
     
     #show NET --> works
-    NET.Draw()  
+    NET.Draw()      
+    
+    #NET.Network_Pruning(Query_var, Evidence)
     
 if __name__ == "__main__":
     main()
