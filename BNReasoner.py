@@ -19,6 +19,9 @@ class BNReasoner:
         
     def Draw(self):
         self.bn.draw_structure() 
+        
+    def Get_CPT(self, var):
+        return self.bn.get_cpt(var)
     
     
 ############################################################################################# Methods to implement
@@ -48,7 +51,7 @@ class BNReasoner:
                         LeafNodesPresent += 1 
                         self.bn.del_var(var) 
             
-        pass
+        return self.bn.get_interaction_graph()
     #return pruned_network
     def D_separated(self, x,y,z):
         pass
@@ -57,7 +60,28 @@ class BNReasoner:
         pass
     #return independent == True / False
     def Marginalization(self, f, x):
-        pass   
+        cpt = self.bn.get_cpt(x)
+        
+        #variables
+        old_length = int(len(cpt.index))
+        row_names = cpt.index.values
+        uneven_indexes = []
+        for index in range(0, old_length):
+            if int(index) %2 == 1:
+                uneven_indexes.append(index)
+        
+        #update factors
+        for index in range(0, old_length, 2):
+            cpt['p'][index] = cpt['p'][index] + cpt['p'][index+1]            
+        
+        #drop every other row
+        for index in uneven_indexes:
+            cpt = cpt.drop(row_names[index], axis=0)
+            
+        #drop column of var
+        cpt = cpt = cpt.drop(x, axis=1) 
+        
+        return cpt
     #return CPT where x is summed-out 
     def Maxing_Out(self, f, x, ):
         pass    
@@ -92,9 +116,17 @@ class main():
     NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)
     
     #show NET --> works
-    NET.Draw()      
+    #NET.Draw()      
     
+    #Applying network pruning
     #NET.Network_Pruning(Query_var, Evidence)
+    
+    #Applying marginalization    
+    Var2 = 'hear-bark'
+    cpt = NET.Get_CPT(Var2)
+    f = cpt['p']   
+    NET.Marginalization(f, Var2) 
+
     
 if __name__ == "__main__":
     main()
