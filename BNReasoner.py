@@ -135,7 +135,7 @@ class BNReasoner:
         # return h (which is fg) 
            
     def Ordering(self,set_var):
-        heuristic = 'min-degree'#min-degree or min-fill
+        heuristic = 'min-degree'#heuristic is min-degree or min-fill
         if heuristic == 'min-degree':
             ordering = []
             graph = self.bn.get_interaction_graph()
@@ -159,12 +159,17 @@ class BNReasoner:
                 #Sum-out x from the interaction graph            
                 for edge in edges:
                     if chosen_var in edge:
-                        self.bn.del_edge(edge) 
+                        var1 = edge[0]#no direction in interaction graph so both directions need to be checked
+                        var2 = edge[1]
+                        try:
+                            self.bn.del_edge((var1, var2))
+                        except:
+                            self.bn.del_edge((var2, var1))
                         edges.remove(edge) 
                 self.bn.del_var(chosen_var)          
                 set_var.remove(chosen_var) 
             return ordering  
-        if heuristic == 'min-fill':
+        elif heuristic == 'min-fill':
             #implement second heuristic   
             pass           
         # return good ordering for elimination of set_var based on min-degree heuristics and min-fill heuristics
