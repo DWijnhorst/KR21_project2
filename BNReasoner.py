@@ -1,6 +1,7 @@
 from typing import Union
 from BayesNet import BayesNet
 import pandas as pd
+import networkx as nx
 class BNReasoner:
     def __init__(self, net: Union[str, BayesNet]):
         """
@@ -23,6 +24,8 @@ class BNReasoner:
     def Get_CPT(self, var):
         return self.bn.get_cpt(var)
     
+    def Get_Vars(self):
+        return self.bn.get_all_variables()    
     
 ############################################################################################# Methods to implement
     def Network_Pruning(self, query_var, e):
@@ -31,12 +34,10 @@ class BNReasoner:
         for evidence in evidence_vars:            
             Outgoing_nodes = self.bn.get_children(evidence)
             for node in Outgoing_nodes:
-                self.bn.del_edge((evidence, node)) 
-                        
+                self.bn.del_edge((evidence, node))                         
                 #apply factor reduction (zeroing out the instances that are incompatible with e)
                 cpt = self.bn.get_cpt(node)
-                self.bn.reduce_factor(e, cpt)
-                                
+                self.bn.reduce_factor(e, cpt)                                
             #delete any leaf nodes that do not appear in Q or e (iteratively)
             iteration = 0
             while iteration == 0 or LeafNodesPresent >= 1:
@@ -49,49 +50,106 @@ class BNReasoner:
                     children = self.bn.get_children(var)
                     if len(children) == 0:                        
                         LeafNodesPresent += 1 
-                        self.bn.del_var(var) 
-            
+                        self.bn.del_var(var)             
         return self.bn.get_interaction_graph()
-    #return pruned_network
+        #return pruned_network
+    
     def D_separated(self, x,y,z):
-        pass
-    #return D_separated == True / False
+        vars = self.bn.get_all_variables()
+        leafnodes = []
+        #delete every leaf node W not in x y or z
+        for i in vars:
+            if (len(self.bn.get_children(i)) == 0) and (i not in x) and (i not in y) and (i not in z):
+                leafnodes.append(i)
+        for leafnode in leafnodes:
+            self.bn.del_var(leafnode)
+        #recursive function call
+        #delete every edge outgoing from nodes in z---> moet dit maar 1x????
+        for var in z:
+            if var in vars:
+                childnodes = self.bn.get_children(var)
+                if len(self.bn.get_children(var)) != 0:
+                    for child in childnodes:
+                        self.bn.del_edge((var , child))
+        while not leafnodes:
+            self.D_separated(x,y,z)
+        graph = self.bn.get_interaction_graph()
+        for subx in x:
+            neighbors = nx.neighbors(graph, subx) # DIT WERKT NOG NIET
+            for value in neighbors:
+                for suby in y:
+                    if suby not in neighbors:
+                        return True
+                return False
+        #return D_separated == True / False
+        
     def Independence(self, x, y,z):
         pass
     #return independent == True / False
     def Marginalization(self, f, x):
-        cpt = self.bn.get_cpt(x)
-        
+        cpt = self.bn.get_cpt(x)        
         #variables
         old_length = int(len(cpt.index))
         row_names = cpt.index.values
         uneven_indexes = []
         for index in range(0, old_length):
             if int(index) %2 == 1:
-                uneven_indexes.append(index)
-        
+                uneven_indexes.append(index)        
         #update factors
         for index in range(0, old_length, 2):
-            cpt['p'][index] = cpt['p'][index] + cpt['p'][index+1]            
-        
+            cpt['p'][index] = cpt['p'][index] + cpt['p'][index+1]         
         #drop every other row
         for index in uneven_indexes:
-            cpt = cpt.drop(row_names[index], axis=0)
-            
+            cpt = cpt.drop(row_names[index], axis=0)            
         #drop column of var
-        cpt = cpt = cpt.drop(x, axis=1) 
-        
+        cpt = cpt = cpt.drop(x, axis=1)         
         return cpt
-    #return CPT where x is summed-out 
-    def Maxing_Out(self, f, x, ):
-        pass    
-    # return (CPT where x is maxed-out) , (the instantiation of x which led to the maximized value)
+        #return CPT where x is summed-out 
+    
+    def Maxing_Out(self, x):
+        cpt = self.bn.get_cpt(x)
+        #print(cpt)
+        old_length = int(len(cpt.index))
+        row_names = cpt.index.values
+        uneven_indexes = []
+        for index in range(0, old_length):
+            if int(index) %2 == 1:
+                uneven_indexes.append(index)
+        for index in range(0, old_length, 2):
+            if cpt['p'][index] > cpt['p'][index+1]:
+                cpt['p'][index] = cpt['p'][index]
+            else:
+                cpt['p'][index] = cpt['p'][index+1]
+        for index in uneven_indexes:
+            cpt = cpt.drop(row_names[index], axis=0)        
+        return cpt           
+        # return (CPT where x is maxed-out) , (the instantiation of x which led to the maximized value)
+    
     def Factor_Multiplication(self, f, g):
-        pass
-    # return h (which is fg)    
+        h = []
+        for factor1 in f:
+            for factor2 in g:
+                y = round(factor1*factor2,2)
+                h.append(y)
+        return h
+        # return h (which is fg) 
+           
     def Ordering(self,set_var):
-        pass
-    # return good ordering for elimination of set_var basred on min-degree heuristics and min-fill heuristics
+        #min-degree ordering:
+        ordering = []
+        while len(ordering) != len(self.bn.get_all_variables):
+            #Queue variable x with the minimum degree in the interaction graph to the ordering
+            #The width of a factor that sums-out x ∈ set_var is then the degree of x in the interaction graph.
+            chosen_var = set_var[0]            
+            #Sum-out x from the interaction graph.
+            ordering.append(chosen_var)
+            cpt = self.Get_CPT(chosen_var)
+            f = cpt['p']
+            new_cpt = self.Marginalization(f, chosen_var)          
+        #min-degree ordering: ..
+        pass           
+        # return good ordering for elimination of set_var based on min-degree heuristics and min-fill heuristics
+    
     def Variable_Elimination(self, input_net, set_var):
         pass
     # return input_net without set_var
@@ -125,8 +183,10 @@ class main():
     Var2 = 'hear-bark'
     cpt = NET.Get_CPT(Var2)
     f = cpt['p']   
-    NET.Marginalization(f, Var2) 
-
+    NET.Marginalization(f, Var2)  
+    
+    #finding a good ordering for variable elimination
+    # NET.Ordering(NET.Get_Vars())
     
 if __name__ == "__main__":
     main()
