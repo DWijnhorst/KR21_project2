@@ -74,17 +74,17 @@ class BNReasoner:
         while not leafnodes:
             self.D_separated(x,y,z)
         graph = self.bn.get_interaction_graph()
+        #see if exists a path
         for subx in x:
-            neighbors = nx.neighbors(graph, subx) # DIT WERKT NOG NIET
-            for value in neighbors:
-                for suby in y:
-                    if suby not in neighbors:
-                        return True
-                return False
-        #return D_separated == True / False
-        
+            for suby in y:
+                if nx.has_path(graph, subx, suby) == False:
+                    return True
+        return False
     def Independence(self, x, y,z):
-        pass
+        if self.D_sperated(x,y,z) == True:
+            return True
+        else:
+            return False
     #return independent == True / False
     def Marginalization(self, f, x):
         cpt = self.bn.get_cpt(x)        
@@ -126,11 +126,14 @@ class BNReasoner:
         # return (CPT where x is maxed-out) , (the instantiation of x which led to the maximized value)
     
     def Factor_Multiplication(self, f, g):
+        f = f.tolist()
+        g = g.tolist()
         h = []
         for factor1 in f:
             for factor2 in g:
                 y = round(factor1*factor2,2)
                 h.append(y)
+        h = pd.Series(h)
         return h
         # return h (which is fg) 
            
@@ -169,21 +172,27 @@ class main():
     Var = "dog-out"
     Evidence = pd.Series({Var : Truth_value})
     Query_var = "family-out"
+    x = ['bowel-problem', 'dog-out']
+    y = ['hear-bark']
+    z = ['family-out']
     
     #Init net
     NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)
     
+    #print(NET.D_separated(x,y,z))
     #show NET --> works
-    #NET.Draw()      
+    NET.Draw()      
     
     #Applying network pruning
     #NET.Network_Pruning(Query_var, Evidence)
     
     #Applying marginalization    
-    Var2 = 'hear-bark'
-    cpt = NET.Get_CPT(Var2)
-    f = cpt['p']   
-    NET.Marginalization(f, Var2)  
+    #Var2 = 'hear-bark'
+    #cpt = NET.Get_CPT(Var2)
+    #f = cpt['p']   
+    #NET.Marginalization(f, Var2)  
+
+    
     
     #finding a good ordering for variable elimination
     # NET.Ordering(NET.Get_Vars())
