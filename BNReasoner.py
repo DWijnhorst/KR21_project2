@@ -86,7 +86,7 @@ class BNReasoner:
         else:
             return False
     #return independent == True / False
-    def Marginalization(self, f, x):
+    def Marginalization(self, f, x):#missing the changes in interaction graph?
         cpt = self.bn.get_cpt(x)        
         #variables
         old_length = int(len(cpt.index))
@@ -138,19 +138,43 @@ class BNReasoner:
         # return h (which is fg) 
            
     def Ordering(self,set_var):
-        #min-degree ordering:
-        ordering = []
-        while len(ordering) != len(self.bn.get_all_variables):
-            #Queue variable x with the minimum degree in the interaction graph to the ordering
-            #The width of a factor that sums-out x ∈ set_var is then the degree of x in the interaction graph.
-            chosen_var = set_var[0]            
-            #Sum-out x from the interaction graph.
-            ordering.append(chosen_var)
-            cpt = self.Get_CPT(chosen_var)
-            f = cpt['p']
-            new_cpt = self.Marginalization(f, chosen_var)          
-        #min-degree ordering: ..
-        pass           
+        heuristic = 'min-degree'#heuristic is min-degree or min-fill
+        if heuristic == 'min-degree':
+            ordering = []
+            graph = self.bn.get_interaction_graph()
+            edges = graph.edges()  
+            #fill ordering according to the smallest degree      
+            while len(ordering) != len(self.bn.get_all_variables()):           
+                chosen_var = set_var[0]#set first var in set_var as default
+                current_degree = 0
+                for edge in edges:
+                        if chosen_var in edge:
+                            current_degree += 1                                         
+                for var in set_var: 
+                    degree = 0 
+                    for edge in edges:
+                        if var in edge:
+                            degree += 1
+                    if degree < current_degree:#replace default var if current var has a smaller degree
+                        chosen_var = var
+                        current_degree = degree            
+                ordering.append(chosen_var)#append the chosen var to the ordering         
+                #Sum-out x from the interaction graph            
+                for edge in edges:
+                    if chosen_var in edge:
+                        var1 = edge[0]#no direction in interaction graph so both directions need to be checked
+                        var2 = edge[1]
+                        try:
+                            self.bn.del_edge((var1, var2))
+                        except:
+                            self.bn.del_edge((var2, var1))
+                        edges.remove(edge) 
+                self.bn.del_var(chosen_var)          
+                set_var.remove(chosen_var) 
+            return ordering  
+        elif heuristic == 'min-fill':
+            #implement second heuristic   
+            pass           
         # return good ordering for elimination of set_var based on min-degree heuristics and min-fill heuristics
     
     def Variable_Elimination(self, input_net, set_var):
@@ -181,12 +205,16 @@ class main():
     
     #print(NET.D_separated(x,y,z))
     #show NET --> works
-    NET.Draw()      
+    # NET.Draw()      
     
     #Applying network pruning
-    #NET.Network_Pruning(Query_var, Evidence)
+    # NET.Network_Pruning(Query_var, Evidence)
     
     #Applying marginalization    
+    # Var2 = 'hear-bark'
+    # cpt = NET.Get_CPT(Var2)
+    # f = cpt['p']   
+    # NET.Marginalization(f, Var2)  
     #Var2 = 'hear-bark'
     #cpt = NET.Get_CPT(Var2)
     #f = cpt['p']   
@@ -195,7 +223,7 @@ class main():
     
     
     #finding a good ordering for variable elimination
-    # NET.Ordering(NET.Get_Vars())
+    NET.Ordering(NET.Get_Vars())
     
 if __name__ == "__main__":
     main()
