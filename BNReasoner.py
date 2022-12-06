@@ -170,9 +170,7 @@ class BNReasoner:
                 set_var.remove(chosen_var) 
             #add last var               
             if set_var:
-                ordering.append(set_var[0])
-            print(f"last ordering: {ordering}")
-                 
+                ordering.append(set_var[0])                 
             return ordering  
         elif heuristic == 'min-fill':
             #implement second heuristic   
@@ -220,9 +218,7 @@ class main():
     #Var2 = 'hear-bark'
     #cpt = NET.Get_CPT(Var2)
     #f = cpt['p']   
-    #NET.Marginalization(f, Var2)  
-
-    
+    #NET.Marginalization(f, Var2)     
     
     #finding a good ordering for variable elimination
     NET.Ordering(NET.Get_Vars())
