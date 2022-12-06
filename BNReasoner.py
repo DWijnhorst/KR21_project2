@@ -52,6 +52,7 @@ class BNReasoner:
                         LeafNodesPresent += 1 
                         self.bn.del_var(var)             
         #alter CTP accordingly
+        self.Marginalization(query_var)#f?
     
     def D_separated(self, x,y,z):
         vars = self.bn.get_all_variables()
@@ -79,14 +80,15 @@ class BNReasoner:
                 if nx.has_path(graph, subx, suby) == False:
                     return True
         return False
+    
     def Independence(self, x, y,z):
         if self.D_sperated(x,y,z) == True:
             return True
         else:
             return False
-    #return independent == True / False
+        #return independent == True / False
     
-    def Marginalization(self, f, x):#missing the changes in interaction graph?
+    def Marginalization(self, x):#f?
         cpt = self.bn.get_cpt(x)        
         #variables
         old_length = int(len(cpt.index))
