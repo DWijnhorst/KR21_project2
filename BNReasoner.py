@@ -138,12 +138,13 @@ class BNReasoner:
         heuristic = 'min-degree'#heuristic is min-degree or min-fill
         if heuristic == 'min-degree':
             ordering = []
+            length = len(set_var) 
             graph = self.bn.get_interaction_graph()
-            edges = graph.edges()  
-            #fill ordering according to the smallest degree      
-            while len(ordering) != len(self.bn.get_all_variables()):           
+            edges = graph.edges()                           
+            while len(ordering) < length:            
+                #fill ordering according to the smallest degree
                 chosen_var = set_var[0]#set first var in set_var as default
-                current_degree = 0
+                current_degree = 0                
                 for edge in edges:
                         if chosen_var in edge:
                             current_degree += 1                                         
@@ -155,19 +156,20 @@ class BNReasoner:
                     if degree < current_degree:#replace default var if current var has a smaller degree
                         chosen_var = var
                         current_degree = degree            
-                ordering.append(chosen_var)#append the chosen var to the ordering         
+                ordering.append(chosen_var)#append the chosen var to the ordering                
                 #Sum-out x from the interaction graph            
                 for edge in edges:
                     if chosen_var in edge:
-                        var1 = edge[0]#no direction in interaction graph so both directions need to be checked
+                        var1 = edge[0]
                         var2 = edge[1]
-                        try:
-                            self.bn.del_edge((var1, var2))
-                        except:
-                            self.bn.del_edge((var2, var1))
-                        edges.remove(edge) 
-                self.bn.del_var(chosen_var)          
+                        graph.remove_edge(var1, var2)
+                graph.remove_node(chosen_var)
                 set_var.remove(chosen_var) 
+            #add last var               
+            if set_var:
+                ordering.append(set_var[0])
+            print(f"last ordering: {ordering}")
+                 
             return ordering  
         elif heuristic == 'min-fill':
             #implement second heuristic   
@@ -195,8 +197,9 @@ class main():
     Query_var = "family-out"
     
     #Init net
-    NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)
-    
+    # NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)
+    NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network)   
+        
     #show NET --> works
     # NET.Draw()      
     
