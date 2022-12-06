@@ -51,8 +51,7 @@ class BNReasoner:
                     if len(children) == 0:                        
                         LeafNodesPresent += 1 
                         self.bn.del_var(var)             
-        return self.bn.get_interaction_graph()
-        #return pruned_network
+        #alter CTP accordingly
     
     def D_separated(self, x,y,z):
         vars = self.bn.get_all_variables()
@@ -86,6 +85,7 @@ class BNReasoner:
         else:
             return False
     #return independent == True / False
+    
     def Marginalization(self, f, x):#missing the changes in interaction graph?
         cpt = self.bn.get_cpt(x)        
         #variables
@@ -180,9 +180,13 @@ class BNReasoner:
     def Variable_Elimination(self, input_net, set_var):
         pass
     # return input_net without set_var
+    
     def Marginal_Distributions(self, q, e):
-        pass
-    # return marginal distribution P(q|e)
+        self.Network_Pruning(self, q, e)
+        cpt = self.bn.get_cpt(q)
+        return cpt['p']
+        # return marginal distribution P(q|e)
+        
     def MAP(self, q, e):
         pass
     # return maximum a-posteriory instantion + value q
