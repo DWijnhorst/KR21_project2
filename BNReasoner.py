@@ -2,6 +2,8 @@ from typing import Union
 from BayesNet import BayesNet
 import pandas as pd
 import networkx as nx
+import matplotlib.pyplot as plt
+import copy as copy
 class BNReasoner:
     def __init__(self, net: Union[str, BayesNet]):
         """
@@ -138,11 +140,11 @@ class BNReasoner:
         # return h (which is fg) 
            
     def Ordering(self,set_var):
-        heuristic = 'min-degree'#heuristic is min-degree or min-fill
-        if heuristic == 'min-degree':
+        heuristic = 'min-fill'#heuristic is min-degree or min-fill
+        if heuristic == 'min-ordering':
             ordering = []
             graph = self.bn.get_interaction_graph()
-            edges = graph.edges()  
+            edges = graph.edges()
             #fill ordering according to the smallest degree      
             while len(ordering) != len(self.bn.get_all_variables()):           
                 chosen_var = set_var[0]#set first var in set_var as default
@@ -173,8 +175,78 @@ class BNReasoner:
                 set_var.remove(chosen_var) 
             return ordering  
         elif heuristic == 'min-fill':
-            #implement second heuristic   
-            pass           
+            ordering = []
+            originalgraph = copy.deepcopy(self.bn.get_interaction_graph())
+            originalset_var = set_var
+            nx.draw(originalgraph, with_labels=True, node_size=3000)
+            plt.show()
+            # cycle:
+            for i in range(len(originalset_var)):
+                neighbors = dict()
+                fill_value_dict = dict()
+                originaledges = originalgraph.edges()
+                for var in set_var:
+                    neighbors[var] = list(nx.neighbors(originalgraph, var))
+                #THIS INNER LOOP WORKS, SO ONLY 1 thing left to do: fix the while loop
+                for i in range(len(set_var)):
+                    graph = copy.deepcopy(originalgraph)
+                    edges = graph.edges()
+                    #i = 3
+                    fill_value = 0
+                    print('set_var[i] =', set_var[i])
+                    #1. Remove edges from/to to set_var[i]
+                    for neighbor in neighbors[set_var[i]]:
+                        try:
+                            graph.remove_edge(set_var[i], neighbor)
+                        except:
+                            graph.remove_edge(neighbor, set_var[i])
+                    #2. Remove set_var[i] from graph
+
+                    graph.remove_node(set_var[i])
+
+                    #3. try if there are still direct connections between the old neighbors of i
+                    for neighbor in range(len(neighbors[set_var[i]])-1):
+                        for neighbor2 in range(neighbor+1, len(neighbors[set_var[i]])):
+                            listforval = neighbors.get(set_var[i])
+                            value1 = listforval[neighbor]
+                            value2 = listforval[neighbor2]
+                            print('value1 = ', value1)
+                            print('value2 = ', value2)                    
+                            if graph.has_edge(value1, value2) == False:
+                                fill_value +=1  #if not a connection, it needs an additional edge, thus fillvalue+1
+                    fill_value_dict.update({set_var[i] :  fill_value})
+                    # add key of smallest value of dictionary to the elimination queue
+                eliminationkey = min(fill_value_dict, key = fill_value_dict.get)
+                print('fill_value_dict =' , fill_value_dict)
+                ordering.append(eliminationkey)
+                print('ordering = ', ordering)
+                
+                #deleting actual edges and nodes and adding edges that dont exist yet
+                for neighbor in neighbors[eliminationkey]:
+                    try:
+                        originalgraph.remove_edge(eliminationkey, neighbor)
+                    except:
+                        originalgraph.remove_edge(neighbor, eliminationkey)
+                
+                originalgraph.remove_node(eliminationkey)
+
+                for neighbor in range(len(neighbors[eliminationkey])-1):
+                    for neighbor2 in range(neighbor+1, len(neighbors[eliminationkey])):
+                        listforval = neighbors.get(eliminationkey)
+                        value1 = listforval[neighbor]
+                        value2 = listforval[neighbor2]
+                        if originalgraph.has_edge(value1, value2) == False:
+                            originalgraph.add_edge(value1, value2)
+                set_var.remove(eliminationkey)
+                #nx.draw(originalgraph, with_labels=True, node_size=3000)
+                #plt.show()
+                print('set_var =' , set_var)
+                print('edges = ', originaledges)
+            print(ordering)
+            return ordering
+
+
+
         # return good ordering for elimination of set_var based on min-degree heuristics and min-fill heuristics
     
     def Variable_Elimination(self, input_net, set_var):
@@ -201,12 +273,11 @@ class main():
     z = ['family-out']
     
     #Init net
-    NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)
+    NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network)
     
     #print(NET.D_separated(x,y,z))
     #show NET --> works
-    # NET.Draw()      
-    
+    #NET.Draw()      
     #Applying network pruning
     # NET.Network_Pruning(Query_var, Evidence)
     
@@ -220,7 +291,7 @@ class main():
     #f = cpt['p']   
     #NET.Marginalization(f, Var2)  
 
-    
+    #test for ordering
     
     #finding a good ordering for variable elimination
     NET.Ordering(NET.Get_Vars())
