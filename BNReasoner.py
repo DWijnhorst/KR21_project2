@@ -53,8 +53,8 @@ class BNReasoner:
                     if len(children) == 0:                        
                         LeafNodesPresent += 1 
                         self.bn.del_var(var)             
-        return self.bn.get_interaction_graph()
-        #return pruned_network
+        #alter CTP accordingly
+        self.Marginalization(query_var)#f?
     
     def D_separated(self, x,y,z):
         vars = self.bn.get_all_variables()
@@ -82,13 +82,15 @@ class BNReasoner:
                 if nx.has_path(graph, subx, suby) == False:
                     return True
         return False
+    
     def Independence(self, x, y,z):
         if self.D_sperated(x,y,z) == True:
             return True
         else:
             return False
-    #return independent == True / False
-    def Marginalization(self, f, x):#missing the changes in interaction graph?
+        #return independent == True / False
+    
+    def Marginalization(self, x):#f?
         cpt = self.bn.get_cpt(x)        
         #variables
         old_length = int(len(cpt.index))
@@ -143,12 +145,13 @@ class BNReasoner:
         heuristic = 'min-fill'#heuristic is min-degree or min-fill
         if heuristic == 'min-ordering':
             ordering = []
+            length = len(set_var) 
             graph = self.bn.get_interaction_graph()
-            edges = graph.edges()
-            #fill ordering according to the smallest degree      
-            while len(ordering) != len(self.bn.get_all_variables()):           
+            edges = graph.edges()                           
+            while len(ordering) < length:            
+                #fill ordering according to the smallest degree
                 chosen_var = set_var[0]#set first var in set_var as default
-                current_degree = 0
+                current_degree = 0                
                 for edge in edges:
                         if chosen_var in edge:
                             current_degree += 1                                         
@@ -160,19 +163,18 @@ class BNReasoner:
                     if degree < current_degree:#replace default var if current var has a smaller degree
                         chosen_var = var
                         current_degree = degree            
-                ordering.append(chosen_var)#append the chosen var to the ordering         
+                ordering.append(chosen_var)#append the chosen var to the ordering                
                 #Sum-out x from the interaction graph            
                 for edge in edges:
                     if chosen_var in edge:
-                        var1 = edge[0]#no direction in interaction graph so both directions need to be checked
+                        var1 = edge[0]
                         var2 = edge[1]
-                        try:
-                            self.bn.del_edge((var1, var2))
-                        except:
-                            self.bn.del_edge((var2, var1))
-                        edges.remove(edge) 
-                self.bn.del_var(chosen_var)          
+                        graph.remove_edge(var1, var2)
+                graph.remove_node(chosen_var)
                 set_var.remove(chosen_var) 
+            #add last var               
+            if set_var:
+                ordering.append(set_var[0])                 
             return ordering  
         elif heuristic == 'min-fill':
             ordering = []
@@ -252,9 +254,13 @@ class BNReasoner:
     def Variable_Elimination(self, input_net, set_var):
         pass
     # return input_net without set_var
+    
     def Marginal_Distributions(self, q, e):
-        pass
-    # return marginal distribution P(q|e)
+        self.Network_Pruning(self, q, e)
+        cpt = self.bn.get_cpt(q)
+        return cpt['p']
+        # return marginal distribution P(q|e)
+        
     def MAP(self, q, e):
         pass
     # return maximum a-posteriory instantion + value q
@@ -273,9 +279,9 @@ class main():
     z = ['family-out']
     
     #Init net
-    NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network)
-    
-    #print(NET.D_separated(x,y,z))
+    # NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network)
+    NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network)   
+        
     #show NET --> works
     #NET.Draw()      
     #Applying network pruning
