@@ -38,23 +38,25 @@ class BNReasoner:
                 #apply factor reduction (zeroing out the instances that are incompatible with e)
                 cpt = self.bn.get_cpt(node)
                 new_cpt = self.bn.reduce_factor(e, cpt)
+                #moet heel de row weg?
                 self.bn.update_cpt(node, new_cpt)
                                                
         #delete any leaf nodes that do not appear in Q or e (iteratively)
         iteration = 0
-        while iteration == 0 or LeafNodesPresent >= 1:
-            iteration += 1
-            LeafNodesPresent = 0
-            vars = self.bn.get_all_variables()
-            for query_var in query_vars:
-                vars.remove(query_var)
-            for evidence_var in evidence_vars:
-                vars.remove(evidence_var)
-            for var in vars:
-                children = self.bn.get_children(var)
-                if len(children) == 0:                        
-                    LeafNodesPresent += 1 
-                    self.bn.del_var(var)
+        if len(query_vars) != len(self.bn.get_all_variables()):#MPE check
+            while iteration == 0 or LeafNodesPresent >= 1:
+                iteration += 1
+                LeafNodesPresent = 0
+                vars = self.bn.get_all_variables()
+                for query_var in query_vars:
+                    vars.remove(query_var)
+                for evidence_var in evidence_vars:
+                    vars.remove(evidence_var)
+                for var in vars:
+                    children = self.bn.get_children(var)
+                    if len(children) == 0:                        
+                        LeafNodesPresent += 1 
+                        self.bn.del_var(var)
     
     def D_separated(self, x,y,z):
         vars = self.bn.get_all_variables()
@@ -90,7 +92,7 @@ class BNReasoner:
             return False
         #return independent == True / False
     
-    def Marginalization(self, x):#f?
+    def Marginalization(self, x):#f nodig?
         cpt = self.bn.get_cpt(x)        
         #variables
         old_length = int(len(cpt.index))
@@ -99,14 +101,14 @@ class BNReasoner:
         for index in range(0, old_length):
             if int(index) %2 == 1:
                 uneven_indexes.append(index)        
-        #update factors
+        #update factors (sum)
         for index in range(0, old_length, 2):
             cpt['p'][index] = cpt['p'][index] + cpt['p'][index+1]         
         #drop every other row
         for index in uneven_indexes:
             cpt = cpt.drop(row_names[index], axis=0)            
-        #drop column of var
-        cpt = cpt = cpt.drop(x, axis=1)         
+        #drop column of marginalized var
+        cpt = cpt.drop(x, axis=1)         
         return cpt
         #return CPT where x is summed-out 
     
@@ -200,19 +202,37 @@ class BNReasoner:
         vars = self.bn.get_all_variables()
         self.Network_Pruning(vars, e)
         
-        #get elimination order from ordering?
+        #get elimination order from ordering
         ordering = self.Ordering(vars, "min-degree")
         
         #for each var: get max prob. and assign that truth value and update with this prob. factor 
         for var in ordering:  
-            #get max cpt["p"]          
-            cpt = self.bn.get_cpt(var)
-            print(cpt)
+            #get max f in cpt                  
+            cpt = self.bn.get_cpt(var)            
+            max = cpt.max()
+            max_p = max['p']            
+            row = cpt.loc[cpt['p'] == max_p]
+            vars_to_assign = row.columns[:-1]#-1 because we dont want column p
             
             #set this truth value and append to MPE
-            #for all cpt's containing var: apply factor multiplication of max * current p
+            for i in range(len(vars_to_assign)):
+                var_to_assign = vars_to_assign[i]
+                truth_value = row[var_to_assign]
+                assignment = pd.Series({var_to_assign : truth_value})
+                MPE.append(assignment)                             
+            
+                #update cpts
+                children = self.bn.get_children(var_to_assign)
+                for child in children:
+                    #apply factor multiplication with max 
+                    cpt_child= self.bn.get_cpt(child)
+                    cpt_child['p'] = self.Factor_Multiplication(cpt_child['p'], [max_p])
+                    
+                    #max-out var from children
+                    new_cpt = self.Maxing_Out(var_to_assign)
+                    self.bn.update_cpt(child, new_cpt)
                                 
-        pass
+        return MPE
         # return most probable explanation given e
 
 class main():
@@ -227,22 +247,18 @@ class main():
     
     #Init net
     NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)
-    # NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network)   
-        
+    # NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network)           
     #show NET 
     # NET.Draw()      
     
-    #Applying network pruning
-    NET.Network_Pruning(Query_var, Evidence)
-    
     #Applying marginalization    
-    Var2 = 'hear-bark'
-    cpt = NET.Get_CPT(Var2)
-    f = cpt['p']   
+    # Var2 = 'hear-bark'
+    # cpt = NET.Get_CPT(Var2)
+    # f = cpt['p']   
     # NET.Marginalization(f, Var2)
     
     #Applying MPE
-    # NET.MEP(Evidence)      
+    NET.MEP(Evidence)      
     
     #finding a good ordering for variable elimination
     # NET.Ordering(NET.Get_Vars())
