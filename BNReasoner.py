@@ -131,8 +131,8 @@ class BNReasoner:
         # return (CPT where x is maxed-out) , (the instantiation of x which led to the maximized value)
     
     def Factor_Multiplication(self, f, g):
-        f = f.tolist()
-        g = g.tolist()
+        # f = f.tolist()
+        # g = g.tolist()
         h = []
         for factor1 in f:
             for factor2 in g:
@@ -208,29 +208,55 @@ class BNReasoner:
         #for each var: get max prob. and assign that truth value and update with this prob. factor 
         for var in ordering:  
             #get max f in cpt                  
-            cpt = self.bn.get_cpt(var)            
-            max = cpt.max()
-            max_p = max['p']            
-            row = cpt.loc[cpt['p'] == max_p]
-            vars_to_assign = row.columns[:-1]#-1 because we dont want column p
+            cpt = self.bn.get_cpt(var)
+            
+            #true max  
+            cpt_true = cpt.loc[cpt[var] == True]         
+            max_true = cpt_true.max()
+            max_p_true = max_true['p']            
+            
+            #false max            
+            cpt_false = cpt.loc[cpt[var] == False]         
+            max_false = cpt_false.max()
+            max_p_false = max_false['p']            
             
             #set this truth value and append to MPE
-            for i in range(len(vars_to_assign)):
-                var_to_assign = vars_to_assign[i]
-                truth_value = row[var_to_assign]
-                assignment = pd.Series({var_to_assign : truth_value})
-                MPE.append(assignment)                             
+            if max_p_true >= max_p_false:
+                truth_value = True
+            else:
+                truth_value = False
+                
+            assignment = pd.Series({var : truth_value})
+            MPE.append(assignment)    
             
-                #update cpts
-                children = self.bn.get_children(var_to_assign)
-                for child in children:
-                    #apply factor multiplication with max 
-                    cpt_child= self.bn.get_cpt(child)
-                    cpt_child['p'] = self.Factor_Multiplication(cpt_child['p'], [max_p])
+            #update child cpts
+            children = self.bn.get_children(var)
+            for child in children:
                     
-                    #max-out var from children
-                    new_cpt = self.Maxing_Out(var_to_assign)
-                    self.bn.update_cpt(child, new_cpt)
+                print(f"Parent cpt: \n {self.bn.get_cpt(var)}")
+                print(f"Child cpt: \n {self.bn.get_cpt(child)}")
+                    
+                #apply factor multiplication with max true and max false 
+                cpt_child= self.bn.get_cpt(child)
+                
+                cpt_rows_true = cpt_child.loc[cpt_child[var] == True]
+                rows_true = cpt_rows_true.index.values
+                cpt_rows_false = cpt_child.loc[cpt_child[var] == False]
+                rows_false = cpt_rows_false.index.values
+                
+                for row in rows_true:
+                    cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [max_p_true])
+                
+                for row in rows_false:
+                    cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [max_p_false])
+                    
+                print(f"Child cpt after multiplication: \n {self.bn.get_cpt(child)}")
+                    
+                #max-out var from children
+                new_cpt = self.Maxing_Out(child)
+                new_cpt = new_cpt.drop(child, axis=1)
+                self.bn.update_cpt(child, new_cpt)
+                print(f"Child cpt after maxing out: \n {self.bn.get_cpt(child)}")
                                 
         return MPE
         # return most probable explanation given e
