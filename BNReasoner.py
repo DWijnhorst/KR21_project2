@@ -2,6 +2,8 @@ from typing import Union
 from BayesNet import BayesNet
 import pandas as pd
 import networkx as nx
+import matplotlib.pyplot as plt
+import copy as copy
 class BNReasoner:
     def __init__(self, net: Union[str, BayesNet]):
         """
@@ -178,8 +180,75 @@ class BNReasoner:
                 ordering.append(set_var[0])                 
             return ordering  
         elif heuristic == 'min-fill':
-            #implement second heuristic   
-            pass           
+            ordering = []
+            originalgraph = copy.deepcopy(self.bn.get_interaction_graph())
+            originalset_var = set_var
+            nx.draw(originalgraph, with_labels=True, node_size=3000)
+            plt.show()
+            # cycle:
+            for i in range(len(originalset_var)):
+                neighbors = dict()
+                fill_value_dict = dict()
+                originaledges = originalgraph.edges()
+                for var in set_var:
+                    neighbors[var] = list(nx.neighbors(originalgraph, var))
+                #THIS INNER LOOP WORKS, SO ONLY 1 thing left to do: fix the while loop
+                for i in range(len(set_var)):
+                    graph = copy.deepcopy(originalgraph)
+                    edges = graph.edges()
+                    #i = 3
+                    fill_value = 0
+                    print('set_var[i] =', set_var[i])
+                    #1. Remove edges from/to to set_var[i]
+                    for neighbor in neighbors[set_var[i]]:
+                        try:
+                            graph.remove_edge(set_var[i], neighbor)
+                        except:
+                            graph.remove_edge(neighbor, set_var[i])
+                    #2. Remove set_var[i] from graph
+
+                    graph.remove_node(set_var[i])
+
+                    #3. try if there are still direct connections between the old neighbors of i
+                    for neighbor in range(len(neighbors[set_var[i]])-1):
+                        for neighbor2 in range(neighbor+1, len(neighbors[set_var[i]])):
+                            listforval = neighbors.get(set_var[i])
+                            value1 = listforval[neighbor]
+                            value2 = listforval[neighbor2]
+                            print('value1 = ', value1)
+                            print('value2 = ', value2)                    
+                            if graph.has_edge(value1, value2) == False:
+                                fill_value +=1  #if not a connection, it needs an additional edge, thus fillvalue+1
+                    fill_value_dict.update({set_var[i] :  fill_value})
+                    # add key of smallest value of dictionary to the elimination queue
+                eliminationkey = min(fill_value_dict, key = fill_value_dict.get)
+                print('fill_value_dict =' , fill_value_dict)
+                ordering.append(eliminationkey)
+                print('ordering = ', ordering)
+                
+                #deleting actual edges and nodes and adding edges that dont exist yet
+                for neighbor in neighbors[eliminationkey]:
+                    try:
+                        originalgraph.remove_edge(eliminationkey, neighbor)
+                    except:
+                        originalgraph.remove_edge(neighbor, eliminationkey)
+                
+                originalgraph.remove_node(eliminationkey)
+
+                for neighbor in range(len(neighbors[eliminationkey])-1):
+                    for neighbor2 in range(neighbor+1, len(neighbors[eliminationkey])):
+                        listforval = neighbors.get(eliminationkey)
+                        value1 = listforval[neighbor]
+                        value2 = listforval[neighbor2]
+                        if originalgraph.has_edge(value1, value2) == False:
+                            originalgraph.add_edge(value1, value2)
+                set_var.remove(eliminationkey)
+                #nx.draw(originalgraph, with_labels=True, node_size=3000)
+                #plt.show()
+                print('set_var =' , set_var)
+                print('edges = ', originaledges)
+            print(ordering)
+            return ordering          
         # return good ordering for elimination of set_var based on min-degree heuristics and min-fill heuristics
     
     def Variable_Elimination(self, input_net, set_var):
@@ -193,13 +262,85 @@ class BNReasoner:
         # return marginal distribution P(q|e)
         
     def MAP(self, q, e):
-        pass
-    # return maximum a-posteriory instantion + value q
+        MAP = []
+        #first apply network pruning given evidence e
+        self.bn.draw_structure()
+        self.Network_Pruning(q, e)
+        self.bn.draw_structure()
+        
+        #get elimination order from ordering
+        ordering = self.Ordering(q, "min-degree")
+        
+        #for each var: get max prob. and assign that truth value and update with this prob. factor 
+        for var in ordering:  
+            #get max f in cpt                  
+            cpt = self.bn.get_cpt(var)
+            
+            #true max  
+            cpt_true = cpt.loc[cpt[var] == True]         
+            max_true = cpt_true.max()
+            max_p_true = max_true['p']            
+            
+            #false max            
+            cpt_false = cpt.loc[cpt[var] == False]         
+            max_false = cpt_false.max()
+            max_p_false = max_false['p']            
+            
+            #set this truth value and append to MPE
+            if max_p_true >= max_p_false:
+                truth_value = True
+            else:
+                truth_value = False
+                
+            assignment = pd.Series({var : truth_value})
+            MAP.append(assignment)    
+            
+            #update child cpts
+            children = self.bn.get_children(var)
+            for child in children:
+                    
+                print(f"Parent cpt: \n {self.bn.get_cpt(var)}")
+                # print(f"Child cpt: \n {self.bn.get_cpt(child)}")
+                    
+                #apply factor multiplication with max true and max false 
+                cpt_child= self.bn.get_cpt(child)
+                
+                cpt_rows_true = cpt_child.loc[cpt_child[var] == True]
+                rows_true = cpt_rows_true.index.values
+                cpt_rows_false = cpt_child.loc[cpt_child[var] == False]
+                rows_false = cpt_rows_false.index.values
+                
+                for row in rows_true:
+                    cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [max_p_true])
+                
+                for row in rows_false:
+                    cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [max_p_false])
+                    
+                # print(f"Child cpt after multiplication: \n {self.bn.get_cpt(child)}")
+                    
+                #max-out var from children
+                new_cpt = self.Maxing_Out(child)
+                if child in new_cpt.columns:
+                    new_cpt = new_cpt.drop(child, axis=1)                
+                # print(f"Child cpt after maxing out: \n {self.bn.get_cpt(child)}")
+                
+                #fix index values
+                length = len(new_cpt.index.values)
+                new_indexes = []
+                for i in range(0,length):
+                    new_indexes.append(i)
+                new_cpt.index = [new_indexes]
+                self.bn.update_cpt(child, new_cpt)
+                # print(f"Child cpt after fixing row indexes: \n {self.bn.get_cpt(child)}")
+                                
+        return MAP
+        # return most probable explanation given e
     
-    def MEP(self, e):
+    def MPE(self, e):
         MPE = []
         #first apply network pruning given evidence e
         vars = self.bn.get_all_variables()
+        vars.remove(e.index)#only works for 1 evidence var
         self.Network_Pruning(vars, e)
         
         #get elimination order from ordering
@@ -234,7 +375,7 @@ class BNReasoner:
             for child in children:
                     
                 print(f"Parent cpt: \n {self.bn.get_cpt(var)}")
-                print(f"Child cpt: \n {self.bn.get_cpt(child)}")
+                # print(f"Child cpt: \n {self.bn.get_cpt(child)}")
                     
                 #apply factor multiplication with max true and max false 
                 cpt_child= self.bn.get_cpt(child)
@@ -250,32 +391,48 @@ class BNReasoner:
                 for row in rows_false:
                     cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [max_p_false])
                     
-                print(f"Child cpt after multiplication: \n {self.bn.get_cpt(child)}")
+                # print(f"Child cpt after multiplication: \n {self.bn.get_cpt(child)}")
                     
                 #max-out var from children
                 new_cpt = self.Maxing_Out(child)
-                new_cpt = new_cpt.drop(child, axis=1)
+                if child in new_cpt.columns:
+                    new_cpt = new_cpt.drop(child, axis=1)                
+                # print(f"Child cpt after maxing out: \n {self.bn.get_cpt(child)}")
+                
+                #fix index values
+                length = len(new_cpt.index.values)
+                new_indexes = []
+                for i in range(0,length):
+                    new_indexes.append(i)
+                new_cpt.index = [new_indexes]
                 self.bn.update_cpt(child, new_cpt)
-                print(f"Child cpt after maxing out: \n {self.bn.get_cpt(child)}")
+                # print(f"Child cpt after fixing row indexes: \n {self.bn.get_cpt(child)}")
                                 
         return MPE
         # return most probable explanation given e
 
 class main():
     # Variables
-    Truth_value = True
-    Var = "dog-out"
-    Evidence = pd.Series({Var : Truth_value})
+    Truth_value = True    
+    
     Query_var = ["family-out"]
+    Var = "hear-bark"
+    
+    # Query_var = ['Rain?', 'Wet Grass?']
+    # Var = "Sprinkler?"
+    Evidence = pd.Series({Var : Truth_value})
+    
     x = ['bowel-problem', 'dog-out']
     y = ['hear-bark']
     z = ['family-out']
     
     #Init net
     NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)
-    # NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network)           
-    #show NET 
+    # NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network)   
+ 
     # NET.Draw()      
+    # NET.Network_Pruning(Query_var, Evidence)  
+    # NET.Draw()   
     
     #Applying marginalization    
     # Var2 = 'hear-bark'
@@ -284,7 +441,14 @@ class main():
     # NET.Marginalization(f, Var2)
     
     #Applying MPE
-    NET.MEP(Evidence)      
+    NET.MAP(x, Evidence)      
+    
+    # vars = NET.bn.get_all_variables()
+    # for var in vars:
+    #     print(f"{NET.bn.get_cpt(var)}\n")
+    
+    print(NET.MPE(Evidence))
+    # print(NET.MAP(['Rain?', 'Wet Grass?'], Evidence))
     
     #finding a good ordering for variable elimination
     # NET.Ordering(NET.Get_Vars())
