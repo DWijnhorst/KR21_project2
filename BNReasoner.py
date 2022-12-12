@@ -42,8 +42,13 @@ class BNReasoner:
                 new_cpt = self.bn.reduce_factor(e, cpt)#reduce p to 0                
                 new_cpt = new_cpt.drop(evidence, axis=1)#remove parent from child (no edge anymore)                
                 new_cpt = new_cpt[new_cpt['p'] != 0]#remove row with p=0
-                self.bn.update_cpt(node, new_cpt)    
                 
+                length = len(new_cpt.index.values)#fix row indexes after removing rows
+                new_indexes = []
+                for i in range(0,length):
+                    new_indexes.append(i)
+                new_cpt.index = [new_indexes]
+                self.bn.update_cpt(node, new_cpt)                
                                           
         #delete any leaf nodes that do not appear in Q or e (iteratively)
         iteration = 0
