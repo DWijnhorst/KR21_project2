@@ -67,26 +67,27 @@ class BNReasoner:
                         LeafNodesPresent += 1 
                         self.bn.del_var(var)
     
-    def D_separated(self, x,y,z):
-        vars = self.bn.get_all_variables()
-        leafnodes = []
-        #delete every leaf node W not in x y or z
-        for i in vars:
-            if (len(self.bn.get_children(i)) == 0) and (i not in x) and (i not in y) and (i not in z):
-                leafnodes.append(i)
-        for leafnode in leafnodes:
-            self.bn.del_var(leafnode)
-        #recursive function call
-        #delete every edge outgoing from nodes in z---> moet dit maar 1x????
-        for var in z:
-            if var in vars:
-                childnodes = self.bn.get_children(var)
-                if len(self.bn.get_children(var)) != 0:
+    def D_separated(self, x,y,z): 
+        graph = self.bn.get_interaction_graph()              
+        iteration = 0
+        while iteration == 0 or leafnodes:
+            iteration +=1   
+            vars = graph.nodes         
+            leafnodes = []
+            #delete every leaf node W not in x y or z
+            for i in vars:
+                if (len(self.bn.get_children(i)) == 0) and (i not in x) and (i not in y) and (i not in z):
+                    leafnodes.append(i)
+            for leafnode in leafnodes:
+                graph.remove_node(leafnode)
+            
+            if iteration == 1:#this only has to happen once
+            #delete every edge outgoing from nodes in z
+                for var in z:
+                    childnodes = self.bn.get_children(var)
                     for child in childnodes:
-                        self.bn.del_edge((var , child))
-        while not leafnodes:
-            self.D_separated(x,y,z)
-        graph = self.bn.get_interaction_graph()
+                        graph.remove_edge(var, child)             
+                        
         #see if exists a path
         for subx in x:
             for suby in y:
@@ -460,43 +461,21 @@ class BNReasoner:
 
 class main():
     # Variables
-    Truth_value = True    
-    
+    Truth_value = True        
     Query_var = ["dog-out"]
     Var = "family-out"
-    
-    # Query_var = ['Rain?', 'Wet Grass?']
-    # Var = "Sprinkler?"
-    Evidence = pd.Series({Var : Truth_value})
-    
-    x = ['bowel-problem', 'dog-out']
-    y = ['hear-bark']
-    z = ['family-out']
+    Evidence = pd.Series({Var : Truth_value})    
+    x = ['family-out']
+    z = ['dog-out']
+    y = ['hear-bark']    
     
     #Init net
-    NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)
-    # NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network)   
+    NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)  
     
-    #Applying marginalization    
-    # Var2 = 'hear-bark'
-    # cpt = NET.Get_CPT(Var2)
-    # f = cpt['p']   
-    # NET.Marginalization(f, Var2)
+    #testing --> uncomment the function you want to test
+    # NET.Network_Pruning(Query_var, Evidence)    
+    # print(NET.D_separated(x,y,z))
     
-    #Applying MPE
-    #NET.MAP(x, Evidence)      
-    
-    # Applying marginal distributions
-    # NET.Marginal_Distributions(x, Evidence)
-    # vars = NET.bn.get_all_variables()
-    # for var in vars:
-    #     print(f"{NET.bn.get_cpt(var)}\n")
-    
-    #print(NET.MPE(Evidence))
-    #print(NET.MAP(z, Evidence))
-    
-    #finding a good ordering for variable elimination
-    # NET.Ordering(NET.Get_Vars())
     
 if __name__ == "__main__":
     main()
