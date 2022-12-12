@@ -39,9 +39,17 @@ class BNReasoner:
                 self.bn.del_edge((evidence, node))                         
                 #apply factor reduction (zeroing out the instances that are incompatible with e)
                 cpt = self.bn.get_cpt(node)
-                new_cpt = self.bn.reduce_factor(e, cpt)
-                #moet heel de row weg?
-                self.bn.update_cpt(node, new_cpt)                           
+                new_cpt = self.bn.reduce_factor(e, cpt)#reduce p to 0                
+                new_cpt = new_cpt.drop(evidence, axis=1)#remove parent from child (no edge anymore)                
+                new_cpt = new_cpt[new_cpt['p'] != 0]#remove row with p=0
+                
+                length = len(new_cpt.index.values)#fix row indexes after removing rows
+                new_indexes = []
+                for i in range(0,length):
+                    new_indexes.append(i)
+                new_cpt.index = [new_indexes]
+                self.bn.update_cpt(node, new_cpt)                
+                                          
         #delete any leaf nodes that do not appear in Q or e (iteratively)
         iteration = 0
         if len(query_vars) != len(self.bn.get_all_variables()):#MPE check
@@ -87,7 +95,7 @@ class BNReasoner:
         return False
     
     def Independence(self, x, y,z):
-        if self.D_sperated(x,y,z) == True:
+        if self.D_separated(x,y,z) == True:
             return True
         else:
             return False
@@ -454,8 +462,8 @@ class main():
     # Variables
     Truth_value = True    
     
-    Query_var = ["family-out"]
-    Var = "hear-bark"
+    Query_var = ["dog-out"]
+    Var = "family-out"
     
     # Query_var = ['Rain?', 'Wet Grass?']
     # Var = "Sprinkler?"
@@ -468,10 +476,6 @@ class main():
     #Init net
     NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)
     # NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network)   
- 
-    #NET.Draw()      
-    #NET.Network_Pruning(x, Evidence)
-    #NET.Draw()   
     
     #Applying marginalization    
     # Var2 = 'hear-bark'
@@ -483,7 +487,7 @@ class main():
     #NET.MAP(x, Evidence)      
     
     # Applying marginal distributions
-    NET.Marginal_Distributions(x, Evidence)
+    # NET.Marginal_Distributions(x, Evidence)
     # vars = NET.bn.get_all_variables()
     # for var in vars:
     #     print(f"{NET.bn.get_cpt(var)}\n")
