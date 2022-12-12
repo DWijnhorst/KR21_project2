@@ -32,7 +32,7 @@ class BNReasoner:
 ############################################################################################# Methods to implement
     def Network_Pruning(self, query_vars, e):        
         #delete outgoing edges from nodes in e
-        evidence_vars = e.index.values        
+        evidence_vars = e.index.values    
         for evidence in evidence_vars:            
             Outgoing_nodes = self.bn.get_children(evidence)
             for node in Outgoing_nodes:
@@ -41,8 +41,7 @@ class BNReasoner:
                 cpt = self.bn.get_cpt(node)
                 new_cpt = self.bn.reduce_factor(e, cpt)
                 #moet heel de row weg?
-                self.bn.update_cpt(node, new_cpt)
-                                               
+                self.bn.update_cpt(node, new_cpt)                           
         #delete any leaf nodes that do not appear in Q or e (iteratively)
         iteration = 0
         if len(query_vars) != len(self.bn.get_all_variables()):#MPE check
@@ -251,25 +250,65 @@ class BNReasoner:
             return ordering          
         # return good ordering for elimination of set_var based on min-degree heuristics and min-fill heuristics
     
-    def Variable_Elimination(self, input_net, set_var):
-        pass
+    def Variable_Elimination(self, x):
+            cpt = self.bn.get_cpt(x)
+            old_length = int(len(cpt.index))
+
+            while old_length > 2:
+                row_names = cpt.index.values
+                steps = old_length/2
+                col_names = cpt.columns
+                first_col = col_names[0]
+                #print(row_names)
+                for index in range(0, int(old_length/2)):
+                    cpt['p'][index] = cpt['p'][index] + cpt['p'][index+steps]      
+                cpt.drop(first_col, inplace = True, axis=1)
+                
+                uneven_indexes = list(range(int(old_length/2),old_length))
+                #print(uneven_indexes)
+                for index in uneven_indexes:
+                    cpt = cpt.drop(row_names[index], axis=0)
+                old_length = int(len(cpt.index))
+            return(cpt)
     # return input_net without set_var
     
-    def Marginal_Distributions(self, q, e):
-        self.Network_Pruning(self, q, e)
+    def Marginal_Distributions(self, q, e): #Basis staat maar is nog niet af. gaat mis bij marginalization / summing out. moet alles 
+        e_index = e.index.tolist()
+        all_cpts = self.bn.get_all_cpts()
+        print(e_index)
+        #Reduce all factors with regard to e)
+        for cpt in all_cpts:
+            Reduced_factors = self.Network_Pruning(q, e)
+         #lijkt goed te gaan???
+        # variable elimination / marginalization of (q and e)
+        varstoeliminate = q.append(e_index)
+        print(q, varstoeliminate)
+        print('varstoeliminate =', varstoeliminate)
+        ordering = self.Ordering(varstoeliminate, 'min-fill')
+        print('ordering = ', ordering)
+        for i in ordering:
+            self.Marginalization(i)
+        joint_marginal = self.bn.get_all_cpts()
+        print('joint marginal =', joint_marginal)
+        # Sum out Q to get Pr(Q|e)
+        posterior_marg = joint_marginal / e
+        print(posterior_marg)
         cpt = self.bn.get_cpt(q)
         return cpt['p']
         # return marginal distribution P(q|e)
         
     def MAP(self, q, e):
         MAP = []
-        #first apply network pruning given evidence e
-        self.bn.draw_structure()
+        # prune net based on q and e
         self.Network_Pruning(q, e)
-        self.bn.draw_structure()
+
+        #sum out q from net
+        for i in q:
+            self.Marginalization(i)
         
+        vars = self.bn.get_all_variables()
         #get elimination order from ordering
-        ordering = self.Ordering(q, "min-degree")
+        ordering = self.Ordering(vars, "min-degree")
         
         #for each var: get max prob. and assign that truth value and update with this prob. factor 
         for var in ordering:  
@@ -286,7 +325,7 @@ class BNReasoner:
             max_false = cpt_false.max()
             max_p_false = max_false['p']            
             
-            #set this truth value and append to MPE
+            #set this truth value and append to MAP
             if max_p_true >= max_p_false:
                 truth_value = True
             else:
@@ -430,9 +469,9 @@ class main():
     NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)
     # NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network)   
  
-    # NET.Draw()      
-    # NET.Network_Pruning(Query_var, Evidence)  
-    # NET.Draw()   
+    #NET.Draw()      
+    #NET.Network_Pruning(x, Evidence)
+    #NET.Draw()   
     
     #Applying marginalization    
     # Var2 = 'hear-bark'
@@ -441,14 +480,16 @@ class main():
     # NET.Marginalization(f, Var2)
     
     #Applying MPE
-    NET.MAP(x, Evidence)      
+    #NET.MAP(x, Evidence)      
     
+    # Applying marginal distributions
+    NET.Marginal_Distributions(x, Evidence)
     # vars = NET.bn.get_all_variables()
     # for var in vars:
     #     print(f"{NET.bn.get_cpt(var)}\n")
     
-    print(NET.MPE(Evidence))
-    # print(NET.MAP(['Rain?', 'Wet Grass?'], Evidence))
+    #print(NET.MPE(Evidence))
+    #print(NET.MAP(z, Evidence))
     
     #finding a good ordering for variable elimination
     # NET.Ordering(NET.Get_Vars())
