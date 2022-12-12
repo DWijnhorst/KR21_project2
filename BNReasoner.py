@@ -87,7 +87,7 @@ class BNReasoner:
         return False
     
     def Independence(self, x, y,z):
-        if self.D_sperated(x,y,z) == True:
+        if self.D_separated(x,y,z) == True:
             return True
         else:
             return False
