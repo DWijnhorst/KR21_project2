@@ -30,7 +30,7 @@ class BNReasoner:
         return self.bn.get_all_variables()    
     
 ############################################################################################# Methods to implement
-    def Network_Pruning(self, query_vars, e):        
+    def Network_Pruning(self, query_vars, e):         
         #delete outgoing edges from nodes in e
         evidence_vars = e.index.values    
         for evidence in evidence_vars:            
@@ -41,14 +41,13 @@ class BNReasoner:
                 cpt = self.bn.get_cpt(node)
                 new_cpt = self.bn.reduce_factor(e, cpt)#reduce p to 0                
                 new_cpt = new_cpt.drop(evidence, axis=1)#remove parent from child (no edge anymore)                
-                new_cpt = new_cpt[new_cpt['p'] != 0]#remove row with p=0
-                
+                new_cpt = new_cpt[new_cpt['p'] != 0]#remove row with p=0                
                 length = len(new_cpt.index.values)#fix row indexes after removing rows
                 new_indexes = []
                 for i in range(0,length):
                     new_indexes.append(i)
                 new_cpt.index = [new_indexes]
-                self.bn.update_cpt(node, new_cpt)                
+                self.bn.update_cpt(node, new_cpt)            
                                           
         #delete any leaf nodes that do not appear in Q or e (iteratively)
         iteration = 0
@@ -66,6 +65,9 @@ class BNReasoner:
                     if len(children) == 0:                        
                         LeafNodesPresent += 1 
                         self.bn.del_var(var)
+        
+        self.bn.draw_structure()
+        #return pruned network
     
     def D_separated(self, x,y,z): 
         graph = self.bn.get_interaction_graph()              
@@ -94,6 +96,7 @@ class BNReasoner:
                 if nx.has_path(graph, subx, suby) == False:
                     return True
         return False
+        #return D-separated == True / False
     
     def Independence(self, x, y,z):
         if self.D_separated(x,y,z) == True:
@@ -102,8 +105,8 @@ class BNReasoner:
             return False
         #return independent == True / False
     
-    def Marginalization(self, x):#f nodig?
-        cpt = self.bn.get_cpt(x)        
+    def Marginalization(self, x):
+        cpt = self.bn.get_cpt(x) 
         #variables
         old_length = int(len(cpt.index))
         row_names = cpt.index.values
@@ -118,11 +121,19 @@ class BNReasoner:
         for index in uneven_indexes:
             cpt = cpt.drop(row_names[index], axis=0)            
         #drop column of marginalized var
-        cpt = cpt.drop(x, axis=1)         
+        cpt = cpt.drop(x, axis=1)   
+        #fix row indexes after removing rows
+        length = len(cpt.index.values)
+        new_indexes = []
+        for i in range(0,length):
+            new_indexes.append(i)
+        cpt.index = [new_indexes]
+        self.bn.update_cpt(x, cpt)  
+              
         return cpt
         #return CPT where x is summed-out 
     
-    def Maxing_Out(self, x):
+    def Maxing_Out(self, x):        
         cpt = self.bn.get_cpt(x)
         old_length = int(len(cpt.index))
         row_names = cpt.index.values
@@ -136,24 +147,28 @@ class BNReasoner:
             else:
                 cpt['p'][index] = cpt['p'][index+1]
         for index in uneven_indexes:
-            cpt = cpt.drop(row_names[index], axis=0)        
+            cpt = cpt.drop(row_names[index], axis=0) 
+        #fix row indexes after removing rows
+        length = len(cpt.index.values)
+        new_indexes = []
+        for i in range(0,length):
+            new_indexes.append(i)
+        cpt.index = [new_indexes]
+        self.bn.update_cpt(x, cpt)       
         return cpt           
         # return (CPT where x is maxed-out) , (the instantiation of x which led to the maximized value)
     
-    def Factor_Multiplication(self, f, g):
-        # f = f.tolist()
-        # g = g.tolist()
-        h = []
+    def Factor_Multiplication(self, f, g):       
+        h = []             
         for factor1 in f:
             for factor2 in g:
                 y = round(factor1*factor2,2)
                 h.append(y)
-        h = pd.Series(h)
+        h = pd.Series(h)       
         return h
         # return h (which is fg) 
            
-    def Ordering(self,set_var, heuristic):
-        #heuristic is min-degree or min-fill
+    def Ordering(self,set_var, heuristic):#heuristic is min-degree or min-fill
         if heuristic == 'min-degree':
             ordering = []
             length = len(set_var) 
@@ -192,21 +207,17 @@ class BNReasoner:
             originalgraph = copy.deepcopy(self.bn.get_interaction_graph())
             originalset_var = set_var
             nx.draw(originalgraph, with_labels=True, node_size=3000)
-            plt.show()
             # cycle:
             for i in range(len(originalset_var)):
                 neighbors = dict()
                 fill_value_dict = dict()
-                originaledges = originalgraph.edges()
+                # originaledges = originalgraph.edges()
                 for var in set_var:
                     neighbors[var] = list(nx.neighbors(originalgraph, var))
-                #THIS INNER LOOP WORKS, SO ONLY 1 thing left to do: fix the while loop
                 for i in range(len(set_var)):
                     graph = copy.deepcopy(originalgraph)
                     edges = graph.edges()
-                    #i = 3
                     fill_value = 0
-                    print('set_var[i] =', set_var[i])
                     #1. Remove edges from/to to set_var[i]
                     for neighbor in neighbors[set_var[i]]:
                         try:
@@ -214,35 +225,26 @@ class BNReasoner:
                         except:
                             graph.remove_edge(neighbor, set_var[i])
                     #2. Remove set_var[i] from graph
-
                     graph.remove_node(set_var[i])
-
                     #3. try if there are still direct connections between the old neighbors of i
                     for neighbor in range(len(neighbors[set_var[i]])-1):
                         for neighbor2 in range(neighbor+1, len(neighbors[set_var[i]])):
                             listforval = neighbors.get(set_var[i])
                             value1 = listforval[neighbor]
-                            value2 = listforval[neighbor2]
-                            print('value1 = ', value1)
-                            print('value2 = ', value2)                    
+                            value2 = listforval[neighbor2]                   
                             if graph.has_edge(value1, value2) == False:
                                 fill_value +=1  #if not a connection, it needs an additional edge, thus fillvalue+1
                     fill_value_dict.update({set_var[i] :  fill_value})
                     # add key of smallest value of dictionary to the elimination queue
                 eliminationkey = min(fill_value_dict, key = fill_value_dict.get)
-                print('fill_value_dict =' , fill_value_dict)
-                ordering.append(eliminationkey)
-                print('ordering = ', ordering)
-                
+                ordering.append(eliminationkey)                
                 #deleting actual edges and nodes and adding edges that dont exist yet
                 for neighbor in neighbors[eliminationkey]:
                     try:
                         originalgraph.remove_edge(eliminationkey, neighbor)
                     except:
-                        originalgraph.remove_edge(neighbor, eliminationkey)
-                
+                        originalgraph.remove_edge(neighbor, eliminationkey)                
                 originalgraph.remove_node(eliminationkey)
-
                 for neighbor in range(len(neighbors[eliminationkey])-1):
                     for neighbor2 in range(neighbor+1, len(neighbors[eliminationkey])):
                         listforval = neighbors.get(eliminationkey)
@@ -251,11 +253,6 @@ class BNReasoner:
                         if originalgraph.has_edge(value1, value2) == False:
                             originalgraph.add_edge(value1, value2)
                 set_var.remove(eliminationkey)
-                #nx.draw(originalgraph, with_labels=True, node_size=3000)
-                #plt.show()
-                print('set_var =' , set_var)
-                print('edges = ', originaledges)
-            print(ordering)
             return ordering          
         # return good ordering for elimination of set_var based on min-degree heuristics and min-fill heuristics
     
@@ -279,7 +276,7 @@ class BNReasoner:
                     cpt = cpt.drop(row_names[index], axis=0)
                 old_length = int(len(cpt.index))
             return(cpt)
-    # return input_net without set_var
+        # return input_net without set_var
     
     def Marginal_Distributions(self, q, e): #Basis staat maar is nog niet af. gaat mis bij marginalization / summing out. moet alles 
         e_index = e.index.tolist()
@@ -460,21 +457,30 @@ class BNReasoner:
         # return most probable explanation given e
 
 class main():
-    # Variables
-    Truth_value = True        
-    Query_var = ["dog-out"]
+    # Variables           
+    Query_var = "dog-out"
     Var = "family-out"
+    Truth_value = True 
     Evidence = pd.Series({Var : Truth_value})    
     x = ['family-out']
     z = ['dog-out']
-    y = ['hear-bark']    
+    y = ['hear-bark']   
     
     #Init net
     NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)  
     
+    # More variables
+    f = NET.Get_CPT('hear-bark')['p']
+    g = NET.Get_CPT('light-on')['p']
+    
     #testing --> uncomment the function you want to test
-    # NET.Network_Pruning(Query_var, Evidence)    
+    # NET.Network_Pruning([Query_var], Evidence) 
     # print(NET.D_separated(x,y,z))
+    # print(NET.Independence(x,y,z))
+    # print(NET.Marginalization(Query_var))
+    # print(NET.Maxing_Out(Query_var))
+    # print(NET.Factor_Multiplication(f,g))
+    # print(NET.Ordering(NET.Get_Vars(), 'min-degree'))#or "min-fill"
     
     
 if __name__ == "__main__":
