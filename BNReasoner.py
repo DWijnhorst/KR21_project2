@@ -257,26 +257,42 @@ class BNReasoner:
         # return good ordering for elimination of set_var based on min-degree heuristics and min-fill heuristics
     
     def Variable_Elimination(self, x):
-            cpt = self.bn.get_cpt(x)
-            old_length = int(len(cpt.index))
-
-            while old_length > 2:
-                row_names = cpt.index.values
-                steps = old_length/2
-                col_names = cpt.columns
-                first_col = col_names[0]
-                #print(row_names)
-                for index in range(0, int(old_length/2)):
-                    cpt['p'][index] = cpt['p'][index] + cpt['p'][index+steps]      
-                cpt.drop(first_col, inplace = True, axis=1)
-                
-                uneven_indexes = list(range(int(old_length/2),old_length))
-                #print(uneven_indexes)
-                for index in uneven_indexes:
-                    cpt = cpt.drop(row_names[index], axis=0)
-                old_length = int(len(cpt.index))
-            return(cpt)
-        # return input_net without set_var
+        #get elimination order                  
+        elimination_order = [x]#can use ordering for this
+        vars_x = self.bn.get_cpt(x).columns[:1] 
+        parents = vars_x
+        while len(parents) != 0:
+            for var in parents:
+                elimination_order.append(var)
+                vars_var = self.bn.get_cpt(var).columns[:1]
+                parents = vars_var.tolist()
+                if var in parents:
+                    parents.remove(var)        
+        #apply variable elimination
+        length = len(elimination_order)
+        for i in range(length-2, -1, -1):#start with lastly added parent (not child (-1))
+            cpt_parent = self.bn.get_cpt(elimination_order[i+1])
+            cpt_child = self.bn.get_cpt(elimination_order[i])              
+            #factor multiplication
+            cpt_rows_true = cpt_child.loc[cpt_child[elimination_order[i+1]] == True]
+            rows_true = cpt_rows_true.index.values
+            cpt_rows_false = cpt_child.loc[cpt_child[elimination_order[i+1]] == False]
+            rows_false = cpt_rows_false.index.values                
+            for row in rows_true:
+                cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [cpt_parent['p'][1]])                
+            for row in rows_false:
+                cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [cpt_parent['p'][0]])
+            #sum-out parent from child
+            old_length = int(len(cpt_child.index))
+            row_names = cpt_child.index.values                
+            for index in range(0, int(old_length/2), 1):#update factors (sum)
+                cpt_child['p'][index] = cpt_child['p'][index] + cpt_child['p'][index+2]                                  
+            for index in range(int(old_length/2),int(old_length)):#drop the last half rows
+                cpt_child = cpt_child.drop(row_names[index], axis=0)                             
+            cpt_child = cpt_child.drop(elimination_order[i+1], axis=1)#drop column of marginalized var 
+            self.bn.update_cpt(elimination_order[i],cpt_child)            
+        #return Pr(x)
+        return self.bn.get_cpt(x)['p'][1]#Pr(x=True)
     
     def Marginal_Distributions(self, q, e): #Basis staat maar is nog niet af. gaat mis bij marginalization / summing out. moet alles 
         e_index = e.index.tolist()
@@ -458,20 +474,21 @@ class BNReasoner:
 
 class main():
     # Variables           
-    Query_var = "dog-out"
-    Var = "family-out"
-    Truth_value = True 
-    Evidence = pd.Series({Var : Truth_value})    
-    x = ['family-out']
-    z = ['dog-out']
-    y = ['hear-bark']   
+    # Query_var = "dog-out"
+    # Var = "family-out"
+    # Truth_value = True 
+    # Evidence = pd.Series({Var : Truth_value})    
+    # x = ['family-out']
+    # z = ['dog-out']
+    # y = ['hear-bark']   
     
     #Init net
-    NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network)  
+    # NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network 1  
+    NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network 2 
     
     # More variables
-    f = NET.Get_CPT('hear-bark')['p']
-    g = NET.Get_CPT('light-on')['p']
+    # f = NET.Get_CPT('hear-bark')['p']
+    # g = NET.Get_CPT('light-on')['p']
     
     #testing --> uncomment the function you want to test
     # NET.Network_Pruning([Query_var], Evidence) 
@@ -481,7 +498,7 @@ class main():
     # print(NET.Maxing_Out(Query_var))
     # print(NET.Factor_Multiplication(f,g))
     # print(NET.Ordering(NET.Get_Vars(), 'min-degree'))#or "min-fill"
-    
+    print(NET.Variable_Elimination('Slippery Road?'))#for this one the NET 2 has to be used
     
 if __name__ == "__main__":
     main()
