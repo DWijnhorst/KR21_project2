@@ -105,7 +105,7 @@ class BNReasoner:
             return False
         #return independent == True / False
     
-    def Marginalization(self, x):
+    def Marginalization(self, x): 
         cpt = self.bn.get_cpt(x) 
         #variables
         old_length = int(len(cpt.index))
@@ -128,25 +128,26 @@ class BNReasoner:
         for i in range(0,length):
             new_indexes.append(i)
         cpt.index = [new_indexes]
-        self.bn.update_cpt(x, cpt)  
-              
+        self.bn.update_cpt(x, cpt)                
         return cpt
         #return CPT where x is summed-out 
     
     def Maxing_Out(self, x):        
         cpt = self.bn.get_cpt(x)
+        print(cpt)
         old_length = int(len(cpt.index))
         row_names = cpt.index.values
-        uneven_indexes = []
-        for index in range(0, old_length):
-            if int(index) %2 == 1:
-                uneven_indexes.append(index)
+        max_indexes = []
         for index in range(0, old_length, 2):
             if cpt['p'][index] > cpt['p'][index+1]:
-                cpt['p'][index] = cpt['p'][index]
+                max_indexes.append(index)
             else:
-                cpt['p'][index] = cpt['p'][index+1]
-        for index in uneven_indexes:
+                max_indexes.append(index+1)        
+        min_indexes = []
+        for index in range(0, old_length):
+            if index not in max_indexes:
+                min_indexes.append(index)        
+        for index in min_indexes:
             cpt = cpt.drop(row_names[index], axis=0) 
         #fix row indexes after removing rows
         length = len(cpt.index.values)
@@ -256,7 +257,7 @@ class BNReasoner:
             return ordering          
         # return good ordering for elimination of set_var based on min-degree heuristics and min-fill heuristics
     
-    def Variable_Elimination(self, x):
+    def Variable_Elimination(self, x):#truthvalue = 0 for False or 1 for True (default)
         #get elimination order                  
         elimination_order = [x]#can use ordering for this
         vars_x = self.bn.get_cpt(x).columns[:1] 
@@ -267,56 +268,69 @@ class BNReasoner:
                 vars_var = self.bn.get_cpt(var).columns[:1]
                 parents = vars_var.tolist()
                 if var in parents:
-                    parents.remove(var)        
+                    parents.remove(var)                          
         #apply variable elimination
-        length = len(elimination_order)
-        for i in range(length-2, -1, -1):#start with lastly added parent (not child (-1))
-            cpt_parent = self.bn.get_cpt(elimination_order[i+1])
-            cpt_child = self.bn.get_cpt(elimination_order[i])              
-            #factor multiplication
-            cpt_rows_true = cpt_child.loc[cpt_child[elimination_order[i+1]] == True]
-            rows_true = cpt_rows_true.index.values
-            cpt_rows_false = cpt_child.loc[cpt_child[elimination_order[i+1]] == False]
-            rows_false = cpt_rows_false.index.values                
-            for row in rows_true:
-                cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [cpt_parent['p'][1]])                
-            for row in rows_false:
-                cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [cpt_parent['p'][0]])
-            #sum-out parent from child
-            old_length = int(len(cpt_child.index))
-            row_names = cpt_child.index.values                
-            for index in range(0, int(old_length/2), 1):#update factors (sum)
-                cpt_child['p'][index] = cpt_child['p'][index] + cpt_child['p'][index+2]                                  
-            for index in range(int(old_length/2),int(old_length)):#drop the last half rows
-                cpt_child = cpt_child.drop(row_names[index], axis=0)                             
-            cpt_child = cpt_child.drop(elimination_order[i+1], axis=1)#drop column of marginalized var 
-            self.bn.update_cpt(elimination_order[i],cpt_child)            
+        if len(elimination_order) != 0:#in case of root node
+            length = len(elimination_order)
+            for i in range(length-2, -1, -1):#start with lastly added parent (not child (-1))
+                cpt_parent = self.bn.get_cpt(elimination_order[i+1])
+                cpt_child = self.bn.get_cpt(elimination_order[i])                                            
+                #factor multiplication
+                cpt_rows_true = cpt_child.loc[cpt_child[elimination_order[i+1]] == True]
+                rows_true = cpt_rows_true.index.values
+                cpt_rows_false = cpt_child.loc[cpt_child[elimination_order[i+1]] == False]
+                rows_false = cpt_rows_false.index.values 
+                
+                print(rows_true)#dit gaat niet goed via md
+                for row in rows_true:
+                    print(row)
+                    if ',' in row:
+                        row.remove(',')
+                               
+                for row in rows_true:
+                    cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [cpt_parent['p'][1]])                
+                for row in rows_false:
+                    cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [cpt_parent['p'][0]])
+                #sum-out parent from child
+                old_length = int(len(cpt_child.index))
+                row_names = cpt_child.index.values                
+                for index in range(0, int(old_length/2), 1):#update factors (sum)
+                    cpt_child['p'][index] = cpt_child['p'][index] + cpt_child['p'][index+2]                                  
+                for index in range(int(old_length/2),int(old_length)):#drop the last half rows
+                    cpt_child = cpt_child.drop(row_names[index], axis=0)                             
+                cpt_child = cpt_child.drop(elimination_order[i+1], axis=1)#drop column of marginalized var 
+                self.bn.update_cpt(elimination_order[i],cpt_child)
         #return Pr(x)
         return self.bn.get_cpt(x)['p'][1]#Pr(x=True)
     
-    def Marginal_Distributions(self, q, e): #Basis staat maar is nog niet af. gaat mis bij marginalization / summing out. moet alles 
-        e_index = e.index.tolist()
-        all_cpts = self.bn.get_all_cpts()
-        print(e_index)
-        #Reduce all factors with regard to e)
-        for cpt in all_cpts:
-            Reduced_factors = self.Network_Pruning(q, e)
-         #lijkt goed te gaan???
-        # variable elimination / marginalization of (q and e)
-        varstoeliminate = q.append(e_index)
-        print(q, varstoeliminate)
-        print('varstoeliminate =', varstoeliminate)
-        ordering = self.Ordering(varstoeliminate, 'min-fill')
-        print('ordering = ', ordering)
-        for i in ordering:
-            self.Marginalization(i)
-        joint_marginal = self.bn.get_all_cpts()
-        print('joint marginal =', joint_marginal)
-        # Sum out Q to get Pr(Q|e)
-        posterior_marg = joint_marginal / e
-        print(posterior_marg)
-        cpt = self.bn.get_cpt(q)
-        return cpt['p']
+    def Marginal_Distributions(self, q, e):#possible evidence empty
+        #reduce factors w.r.t. evidence
+        vars = self.bn.get_all_variables()
+        for var in vars:
+            cpt = self.bn.get_cpt(var)
+            column_names = cpt.columns
+            evidence_var = e.index.values.tolist()
+            if evidence_var[0] in column_names:
+                cpt = self.bn.reduce_factor(e, cpt)
+                cpt = cpt[cpt['p'] != 0] 
+                self.bn.update_cpt(var, cpt)                             
+                length = len(cpt.index.values)#fix row indexes after removing rows
+                new_indexes = []
+                for i in range(0,length):
+                    new_indexes.append(i)
+                cpt.index = [new_indexes] 
+                print(new_indexes)               
+                self.bn.update_cpt(var, cpt)                 
+        #compute joint marginal via variable elimination
+        PrTrue = self.Variable_Elimination(q)
+        PrFalse = self.Variable_Elimination(q)        
+        #obtain Pr(evidence)
+        cpt_evidence = self.bn.get_cpt(evidence_var)
+        evidenceTrue = cpt_evidence['p']        
+        #compute Pr(q|e) and Pr(-q|e)
+        marginalTrue = PrTrue / evidenceTrue
+        marginalFalse = PrFalse / evidenceTrue
+        return (marginalTrue, marginalFalse) 
         # return marginal distribution P(q|e)
         
     def MAP(self, q, e):
@@ -473,32 +487,20 @@ class BNReasoner:
         # return most probable explanation given e
 
 class main():
-    # Variables           
-    # Query_var = "dog-out"
-    # Var = "family-out"
-    # Truth_value = True 
-    # Evidence = pd.Series({Var : Truth_value})    
-    # x = ['family-out']
-    # z = ['dog-out']
-    # y = ['hear-bark']   
-    
     #Init net
     # NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network 1  
-    NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network 2 
-    
-    # More variables
-    # f = NET.Get_CPT('hear-bark')['p']
-    # g = NET.Get_CPT('light-on')['p']
+    NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network 2
     
     #testing --> uncomment the function you want to test
-    # NET.Network_Pruning([Query_var], Evidence) 
-    # print(NET.D_separated(x,y,z))
-    # print(NET.Independence(x,y,z))
-    # print(NET.Marginalization(Query_var))
-    # print(NET.Maxing_Out(Query_var))
-    # print(NET.Factor_Multiplication(f,g))
+    # NET.Network_Pruning(["dog-out"], pd.Series({"family-out" : True}) ) 
+    # print(NET.D_separated(['family-out'], ['hear-bark'], ['dog-out']))
+    # print(NET.Independence(['family-out'], ['hear-bark'], ['dog-out']))
+    # print(NET.Marginalization("dog-out"))
+    # print(NET.Maxing_Out("dog-out"))
+    # print(NET.Factor_Multiplication(NET.Get_CPT('hear-bark')['p'],NET.Get_CPT('light-on')['p']))
     # print(NET.Ordering(NET.Get_Vars(), 'min-degree'))#or "min-fill"
-    print(NET.Variable_Elimination('Slippery Road?'))#for this one the NET 2 has to be used
+    # print(NET.Variable_Elimination('Slippery Road?'))#for this one the NET 2 is used
+    print(NET.Marginal_Distributions('Slippery Road?', pd.Series({"Winter?" : True})))
     
 if __name__ == "__main__":
     main()
