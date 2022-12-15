@@ -257,7 +257,7 @@ class BNReasoner:
             return ordering          
         # return good ordering for elimination of set_var based on min-degree heuristics and min-fill heuristics
     
-    def Variable_Elimination(self, x):#truthvalue = 0 for False or 1 for True (default)
+    def Variable_Elimination(self, x, truthvalue = 1):#truthvalue = 0 for False or 1 for True (default)
         #get elimination order                  
         elimination_order = [x]#can use ordering for this
         vars_x = self.bn.get_cpt(x).columns[:1] 
@@ -277,31 +277,50 @@ class BNReasoner:
                 cpt_child = self.bn.get_cpt(elimination_order[i])                                            
                 #factor multiplication
                 cpt_rows_true = cpt_child.loc[cpt_child[elimination_order[i+1]] == True]
-                rows_true = cpt_rows_true.index.values
+                rows_true = cpt_rows_true.index.values                
+                #catch tuple bug
+                if len(rows_true) != 0:
+                    if type(rows_true[0]) is tuple:
+                        new_rows_true = []
+                        for row in rows_true:
+                            row = row[0]
+                            new_rows_true.append(row)
+                        rows_true =  new_rows_true                
                 cpt_rows_false = cpt_child.loc[cpt_child[elimination_order[i+1]] == False]
-                rows_false = cpt_rows_false.index.values 
-                
-                print(rows_true)#dit gaat niet goed via md
-                for row in rows_true:
-                    print(row)
-                    if ',' in row:
-                        row.remove(',')
-                               
-                for row in rows_true:
-                    cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [cpt_parent['p'][1]])                
-                for row in rows_false:
-                    cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [cpt_parent['p'][0]])
+                rows_false = cpt_rows_false.index.values                
+                #catch tuple bug
+                if len(rows_false) != 0:
+                    if type(rows_false[0]) is tuple:
+                        new_rows_false = []
+                        for row in rows_false:
+                            row = row[0]
+                            new_rows_false.append(row) 
+                        rows_false = new_rows_false    
+                if cpt_parent.loc[cpt_parent[elimination_order[i+1]]==True]['p'].size > 0:                    
+                    for row in rows_true:
+                        cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], cpt_parent.loc[cpt_parent[elimination_order[i+1]] == True]['p'].tolist())                
+                if cpt_parent.loc[cpt_parent[elimination_order[i+1]]==False]['p'].size > 0:
+                    for row in rows_false:
+                        cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], cpt_parent.loc[cpt_parent[elimination_order[i+1]] == False]['p'].tolist())
+                      
                 #sum-out parent from child
                 old_length = int(len(cpt_child.index))
-                row_names = cpt_child.index.values                
-                for index in range(0, int(old_length/2), 1):#update factors (sum)
-                    cpt_child['p'][index] = cpt_child['p'][index] + cpt_child['p'][index+2]                                  
-                for index in range(int(old_length/2),int(old_length)):#drop the last half rows
-                    cpt_child = cpt_child.drop(row_names[index], axis=0)                             
+                row_names = cpt_child.index.values  
+                if len(rows_true) != 0 and len(rows_false) != 0:
+                    if len(rows_true) + len(rows_false) == 2:
+                        for index in range(0, int(old_length/2), 1):#update factors (sum)
+                            cpt_child['p'][index] = cpt_child['p'][index] + cpt_child['p'][index+1]                                                                                 
+                        for index in range(int(old_length/2),int(old_length)):#drop the last half rows
+                            cpt_child = cpt_child.drop(row_names[index], axis=0)
+                    else:
+                        for index in range(0, int(old_length/2), 1):#update factors (sum)
+                            cpt_child['p'][index] = cpt_child['p'][index] + cpt_child['p'][index+2]                                                                                 
+                        for index in range(int(old_length/2),int(old_length)):#drop the last half rows
+                            cpt_child = cpt_child.drop(row_names[index], axis=0)
                 cpt_child = cpt_child.drop(elimination_order[i+1], axis=1)#drop column of marginalized var 
                 self.bn.update_cpt(elimination_order[i],cpt_child)
         #return Pr(x)
-        return self.bn.get_cpt(x)['p'][1]#Pr(x=True)
+        return self.bn.get_cpt(x)['p'][truthvalue]#Pr(x=True)
     
     def Marginal_Distributions(self, q, e):#possible evidence empty
         #reduce factors w.r.t. evidence
@@ -314,23 +333,22 @@ class BNReasoner:
                 cpt = self.bn.reduce_factor(e, cpt)
                 cpt = cpt[cpt['p'] != 0] 
                 self.bn.update_cpt(var, cpt)                             
-                length = len(cpt.index.values)#fix row indexes after removing rows
+                length = len(cpt.index.values)#fix row indexes after removing rows, hier gaat iets niet goed (,)
                 new_indexes = []
                 for i in range(0,length):
                     new_indexes.append(i)
-                cpt.index = [new_indexes] 
-                print(new_indexes)               
+                cpt.index = [new_indexes]             
                 self.bn.update_cpt(var, cpt)                 
         #compute joint marginal via variable elimination
-        PrTrue = self.Variable_Elimination(q)
-        PrFalse = self.Variable_Elimination(q)        
+        PrTrue = self.Variable_Elimination(q, 1)
+        PrFalse = self.Variable_Elimination(q, 0)        
         #obtain Pr(evidence)
-        cpt_evidence = self.bn.get_cpt(evidence_var)
+        cpt_evidence = self.bn.get_cpt(evidence_var[0])
         evidenceTrue = cpt_evidence['p']        
         #compute Pr(q|e) and Pr(-q|e)
         marginalTrue = PrTrue / evidenceTrue
         marginalFalse = PrFalse / evidenceTrue
-        return (marginalTrue, marginalFalse) 
+        return (marginalTrue.tolist()[0], marginalFalse.tolist()[0]) 
         # return marginal distribution P(q|e)
         
     def MAP(self, q, e):
@@ -415,65 +433,51 @@ class BNReasoner:
         MPE = []
         #first apply network pruning given evidence e
         vars = self.bn.get_all_variables()
-        vars.remove(e.index)#only works for 1 evidence var
-        self.Network_Pruning(vars, e)
-        
+        if len(e) != 0:#possible empty evidence
+            vars.remove(e.index)
+            self.Network_Pruning(vars, e)        
         #get elimination order from ordering
-        ordering = self.Ordering(vars, "min-degree")
-        
+        ordering = self.Ordering(vars, "min-degree")        
         #for each var: get max prob. and assign that truth value and update with this prob. factor 
         for var in ordering:  
             #get max f in cpt                  
-            cpt = self.bn.get_cpt(var)
-            
+            cpt = self.bn.get_cpt(var)            
             #true max  
             cpt_true = cpt.loc[cpt[var] == True]         
             max_true = cpt_true.max()
-            max_p_true = max_true['p']            
-            
+            max_p_true = max_true['p'] 
             #false max            
             cpt_false = cpt.loc[cpt[var] == False]         
             max_false = cpt_false.max()
-            max_p_false = max_false['p']            
-            
+            max_p_false = max_false['p']          
             #set this truth value and append to MPE
             if max_p_true >= max_p_false:
                 truth_value = True
             else:
                 truth_value = False
-                
             assignment = pd.Series({var : truth_value})
             MPE.append(assignment)    
-            
             #update child cpts
             children = self.bn.get_children(var)
             for child in children:
-                    
                 print(f"Parent cpt: \n {self.bn.get_cpt(var)}")
                 # print(f"Child cpt: \n {self.bn.get_cpt(child)}")
-                    
                 #apply factor multiplication with max true and max false 
                 cpt_child= self.bn.get_cpt(child)
-                
                 cpt_rows_true = cpt_child.loc[cpt_child[var] == True]
                 rows_true = cpt_rows_true.index.values
                 cpt_rows_false = cpt_child.loc[cpt_child[var] == False]
                 rows_false = cpt_rows_false.index.values
-                
                 for row in rows_true:
                     cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [max_p_true])
-                
                 for row in rows_false:
                     cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [max_p_false])
-                    
                 # print(f"Child cpt after multiplication: \n {self.bn.get_cpt(child)}")
-                    
                 #max-out var from children
                 new_cpt = self.Maxing_Out(child)
                 if child in new_cpt.columns:
                     new_cpt = new_cpt.drop(child, axis=1)                
                 # print(f"Child cpt after maxing out: \n {self.bn.get_cpt(child)}")
-                
                 #fix index values
                 length = len(new_cpt.index.values)
                 new_indexes = []
@@ -481,15 +485,14 @@ class BNReasoner:
                     new_indexes.append(i)
                 new_cpt.index = [new_indexes]
                 self.bn.update_cpt(child, new_cpt)
-                # print(f"Child cpt after fixing row indexes: \n {self.bn.get_cpt(child)}")
-                                
+                print(f"Child cpt after fixing row indexes: \n {self.bn.get_cpt(child)}")
         return MPE
         # return most probable explanation given e
 
 class main():
     #Init net
-    # NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network 1  
-    NET = BNReasoner("testing/lecture_example.BIFXML") #initializing network 2
+    NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network 1  
+    NET2 = BNReasoner("testing/lecture_example.BIFXML") #initializing network 2
     
     #testing --> uncomment the function you want to test
     # NET.Network_Pruning(["dog-out"], pd.Series({"family-out" : True}) ) 
@@ -499,8 +502,10 @@ class main():
     # print(NET.Maxing_Out("dog-out"))
     # print(NET.Factor_Multiplication(NET.Get_CPT('hear-bark')['p'],NET.Get_CPT('light-on')['p']))
     # print(NET.Ordering(NET.Get_Vars(), 'min-degree'))#or "min-fill"
-    # print(NET.Variable_Elimination('Slippery Road?'))#for this one the NET 2 is used
-    print(NET.Marginal_Distributions('Slippery Road?', pd.Series({"Winter?" : True})))
+    # print(NET2.Variable_Elimination('Slippery Road?'))
+    print(NET2.Marginal_Distributions('Slippery Road?', pd.Series({"Winter?" : True})))#vanaf hier moet nog getest worden
+    # print(NET2.MAP('Slippery Road?', pd.Series({"Winter?" : True})))
+    # print(NET2.MPE(pd.Series({"Winter?" : True})))
     
 if __name__ == "__main__":
     main()
