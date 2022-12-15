@@ -94,36 +94,7 @@ class BNReasoner:
                 if nx.has_path(graph, subx, suby) == False:
                     return True
         return False
-        #return D-separated == True / False
-    
-    # def D_separated(self, x,y,z):#Daans versie
-    #     graph = self.bn.get_interaction_graph()              
-    #     iteration = 0
-    #     while iteration == 0 or leafnodes:
-    #         iteration +=1   
-    #         vars = self.Get_Vars()
-    #         leafnodes = []
-    #         #delete every leaf node W not in x y or z
-    #         for i in vars:
-    #             if (len(self.bn.get_children(i)) == 0) and (i not in x) and (i not in y) and (i not in z):
-    #                 leafnodes.append(i)
-    #         for leafnode in leafnodes:
-    #             self.bn.del_var(leafnode)
-            
-    #         if iteration == 1:#this only has to happen once
-    #         #delete every edge outgoing from nodes in z
-    #             for var in z:
-    #                 childnodes = self.bn.get_children(var)
-    #                 for child in childnodes:
-    #                     self.bn.del_edge([var, child])             
-    #     graph = self.bn.get_interaction_graph()                             
-    #     #see if exists a path
-    #     for subx in x:
-    #         for suby in y:
-    #             if nx.has_path(graph, subx, suby) == False :
-    #                 return True
-    #     return False
-    #     #return D-separated == True / False    
+        #return D-separated == True / False    
     
     def Independence(self, x, y,z):
         if self.D_separated(x,y,z) == True:
@@ -380,88 +351,24 @@ class BNReasoner:
         
     def MAP(self, q, e):
         MAP = []
-        # prune net based on q and e
-        self.Network_Pruning(q, e)
-
-        #sum out q from net
-        for i in q:
-            self.Marginalization(i)
-        
         vars = self.bn.get_all_variables()
-        #get elimination order from ordering
-        ordering = self.Ordering(vars, "min-degree")
-        
-        #for each var: get max prob. and assign that truth value and update with this prob. factor 
-        for var in ordering:  
-            #get max f in cpt                  
-            cpt = self.bn.get_cpt(var)
-            
-            #true max  
-            cpt_true = cpt.loc[cpt[var] == True]         
-            max_true = cpt_true.max()
-            max_p_true = max_true['p']            
-            
-            #false max            
-            cpt_false = cpt.loc[cpt[var] == False]         
-            max_false = cpt_false.max()
-            max_p_false = max_false['p']            
-            
-            #set this truth value and append to MAP
-            if max_p_true >= max_p_false:
-                truth_value = True
-            else:
-                truth_value = False
-                
-            assignment = pd.Series({var : truth_value})
-            MAP.append(assignment)    
-            
-            #update child cpts
-            children = self.bn.get_children(var)
-            for child in children:
-                    
-                print(f"Parent cpt: \n {self.bn.get_cpt(var)}")
-                # print(f"Child cpt: \n {self.bn.get_cpt(child)}")
-                    
-                #apply factor multiplication with max true and max false 
-                cpt_child= self.bn.get_cpt(child)
-                
-                cpt_rows_true = cpt_child.loc[cpt_child[var] == True]
-                rows_true = cpt_rows_true.index.values
-                cpt_rows_false = cpt_child.loc[cpt_child[var] == False]
-                rows_false = cpt_rows_false.index.values
-                
-                for row in rows_true:
-                    cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [max_p_true])
-                
-                for row in rows_false:
-                    cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [max_p_false])
-                    
-                # print(f"Child cpt after multiplication: \n {self.bn.get_cpt(child)}")
-                    
-                #max-out var from children
-                new_cpt = self.Maxing_Out(child)
-                if child in new_cpt.columns:
-                    new_cpt = new_cpt.drop(child, axis=1)                
-                # print(f"Child cpt after maxing out: \n {self.bn.get_cpt(child)}")
-                
-                #fix index values
-                length = len(new_cpt.index.values)
-                new_indexes = []
-                for i in range(0,length):
-                    new_indexes.append(i)
-                new_cpt.index = [new_indexes]
-                self.bn.update_cpt(child, new_cpt)
-                # print(f"Child cpt after fixing row indexes: \n {self.bn.get_cpt(child)}")
-                                
+        for var in q:
+            vars.remove(var)
+        #sum out all variables except those in q
+        for var in vars:
+            new_cpt = self.Marginalization(var)
+            self.bn.update_cpt(var, new_cpt)        
+        MAP = self.MPE(q,e)   
         return MAP
         # return most probable explanation given e
     
-    def MPE(self, e):
+    def MPE(self, q, e):
         MPE = []
         #first apply network pruning given evidence e
-        vars = self.bn.get_all_variables()
+        vars = q
         if len(e) != 0:#possible empty evidence
-            vars.remove(e.index)
+            if e.index in vars:
+                vars.remove(e.index)
             self.Network_Pruning(vars, e)        
         #get elimination order from ordering
         ordering = self.Ordering(vars, "min-fill")        
@@ -544,8 +451,8 @@ class main():
     # print(NET.Ordering(NET.Get_Vars(), 'min-degree'))#or "min-fill"
     # print(NET2.Variable_Elimination('Slippery Road?'))
     # print(NET2.Marginal_Distributions('Slippery Road?', pd.Series({"Winter?" : True})))#vanaf hier moet nog getest worden
-    # print(NET2.MAP('Slippery Road?', pd.Series({"Winter?" : True})))
-    print(NET2.MPE(pd.Series({"Winter?" : True})))
+    # print(NET2.MAP(['Slippery Road?', "Sprinkler?"], pd.Series({"Winter?" : True})))
+    # print(NET2.MPE(NET2.Get_Vars(),pd.Series({"Winter?" : True})))
     
 if __name__ == "__main__":
     main()
