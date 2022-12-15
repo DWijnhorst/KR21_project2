@@ -81,15 +81,13 @@ class BNReasoner:
                 if (len(self.bn.get_children(i)) == 0) and (i not in x) and (i not in y) and (i not in z):
                     leafnodes.append(i)
             for leafnode in leafnodes:
-                graph.remove_node(leafnode)
-            
+                graph.remove_node(leafnode)            
             if iteration == 1:#this only has to happen once
             #delete every edge outgoing from nodes in z
                 for var in z:
                     childnodes = self.bn.get_children(var)
                     for child in childnodes:
-                        graph.remove_edge(var, child)             
-                        
+                        graph.remove_edge(var, child) 
         #see if exists a path
         for subx in x:
             for suby in y:
@@ -97,6 +95,35 @@ class BNReasoner:
                     return True
         return False
         #return D-separated == True / False
+    
+    # def D_separated(self, x,y,z):#Daans versie
+    #     graph = self.bn.get_interaction_graph()              
+    #     iteration = 0
+    #     while iteration == 0 or leafnodes:
+    #         iteration +=1   
+    #         vars = self.Get_Vars()
+    #         leafnodes = []
+    #         #delete every leaf node W not in x y or z
+    #         for i in vars:
+    #             if (len(self.bn.get_children(i)) == 0) and (i not in x) and (i not in y) and (i not in z):
+    #                 leafnodes.append(i)
+    #         for leafnode in leafnodes:
+    #             self.bn.del_var(leafnode)
+            
+    #         if iteration == 1:#this only has to happen once
+    #         #delete every edge outgoing from nodes in z
+    #             for var in z:
+    #                 childnodes = self.bn.get_children(var)
+    #                 for child in childnodes:
+    #                     self.bn.del_edge([var, child])             
+    #     graph = self.bn.get_interaction_graph()                             
+    #     #see if exists a path
+    #     for subx in x:
+    #         for suby in y:
+    #             if nx.has_path(graph, subx, suby) == False :
+    #                 return True
+    #     return False
+    #     #return D-separated == True / False    
     
     def Independence(self, x, y,z):
         if self.D_separated(x,y,z) == True:
@@ -437,11 +464,11 @@ class BNReasoner:
             vars.remove(e.index)
             self.Network_Pruning(vars, e)        
         #get elimination order from ordering
-        ordering = self.Ordering(vars, "min-degree")        
+        ordering = self.Ordering(vars, "min-fill")        
         #for each var: get max prob. and assign that truth value and update with this prob. factor 
         for var in ordering:  
             #get max f in cpt                  
-            cpt = self.bn.get_cpt(var)            
+            cpt = self.bn.get_cpt(var) 
             #true max  
             cpt_true = cpt.loc[cpt[var] == True]         
             max_true = cpt_true.max()
@@ -460,7 +487,6 @@ class BNReasoner:
             #update child cpts
             children = self.bn.get_children(var)
             for child in children:
-                print(f"Parent cpt: \n {self.bn.get_cpt(var)}")
                 # print(f"Child cpt: \n {self.bn.get_cpt(child)}")
                 #apply factor multiplication with max true and max false 
                 cpt_child= self.bn.get_cpt(child)
@@ -472,20 +498,34 @@ class BNReasoner:
                     cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [max_p_true])
                 for row in rows_false:
                     cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], [max_p_false])
-                # print(f"Child cpt after multiplication: \n {self.bn.get_cpt(child)}")
                 #max-out var from children
-                new_cpt = self.Maxing_Out(child)
-                if child in new_cpt.columns:
-                    new_cpt = new_cpt.drop(child, axis=1)                
-                # print(f"Child cpt after maxing out: \n {self.bn.get_cpt(child)}")
+                old_length = int(len(cpt_child.index))
+                row_names = cpt_child.index.values  
+                max_index_false = 0            
+                for index in range(0, int(old_length/2), 1):#max in first half rows
+                    if cpt_child['p'][index] > cpt_child['p'][max_index_false]:
+                        max_index_false = index
+                max_index_true = int(old_length/2)
+                for index in range(int(old_length/2), int(old_length), 1):#max in second half rows
+                    if cpt_child['p'][index] > cpt_child['p'][max_index_true]:
+                        max_index_true = index  
+                max_indexes = [max_index_false, max_index_true] 
+                min_indexes = []
+                for index in range(0, old_length-1):
+                    if index not in max_indexes:
+                        min_indexes.append(index)        
+                for index in min_indexes:
+                    cpt_child = cpt_child.drop(row_names[index], axis=0)
+                #drop parent column in child cpt
+                if var in cpt_child.columns:
+                    cpt_child = cpt_child.drop(var, axis=1)  
                 #fix index values
-                length = len(new_cpt.index.values)
+                length = len(cpt_child.index.values)
                 new_indexes = []
                 for i in range(0,length):
                     new_indexes.append(i)
-                new_cpt.index = [new_indexes]
-                self.bn.update_cpt(child, new_cpt)
-                print(f"Child cpt after fixing row indexes: \n {self.bn.get_cpt(child)}")
+                cpt_child.index = [new_indexes]
+                self.bn.update_cpt(child, cpt_child)
         return MPE
         # return most probable explanation given e
 
@@ -503,9 +543,9 @@ class main():
     # print(NET.Factor_Multiplication(NET.Get_CPT('hear-bark')['p'],NET.Get_CPT('light-on')['p']))
     # print(NET.Ordering(NET.Get_Vars(), 'min-degree'))#or "min-fill"
     # print(NET2.Variable_Elimination('Slippery Road?'))
-    print(NET2.Marginal_Distributions('Slippery Road?', pd.Series({"Winter?" : True})))#vanaf hier moet nog getest worden
+    # print(NET2.Marginal_Distributions('Slippery Road?', pd.Series({"Winter?" : True})))#vanaf hier moet nog getest worden
     # print(NET2.MAP('Slippery Road?', pd.Series({"Winter?" : True})))
-    # print(NET2.MPE(pd.Series({"Winter?" : True})))
+    print(NET2.MPE(pd.Series({"Winter?" : True})))
     
 if __name__ == "__main__":
     main()
