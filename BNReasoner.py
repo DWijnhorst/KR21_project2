@@ -70,30 +70,33 @@ class BNReasoner:
         #return pruned network
     
     def D_separated(self, x,y,z): 
-        graph = self.bn.get_interaction_graph()              
-        iteration = 0
-        while iteration == 0 or leafnodes:
-            iteration +=1   
-            vars = graph.nodes         
-            leafnodes = []
-            #delete every leaf node W not in x y or z
-            for i in vars:
-                if (len(self.bn.get_children(i)) == 0) and (i not in x) and (i not in y) and (i not in z):
-                    leafnodes.append(i)
-            for leafnode in leafnodes:
-                graph.remove_node(leafnode)            
-            if iteration == 1:#this only has to happen once
-            #delete every edge outgoing from nodes in z
-                for var in z:
-                    childnodes = self.bn.get_children(var)
-                    for child in childnodes:
-                        graph.remove_edge(var, child) 
-        #see if exists a path
-        for subx in x:
-            for suby in y:
-                if nx.has_path(graph, subx, suby) == False:
-                    return True
-        return False
+            graph = self.bn.get_interaction_graph()              
+            iteration = 0
+            while iteration == 0 or leafnodes:
+                iteration +=1   
+                vars = self.Get_Vars()
+                leafnodes = []
+                #delete every leaf node W not in x y or z
+                for i in vars:
+                    if (len(self.bn.get_children(i)) == 0) and (i not in x) and (i not in y) and (i not in z):
+                        leafnodes.append(i)
+                for leafnode in leafnodes:
+                    graph.remove_node(leafnode)
+                    self.bn.del_var(leafnode)
+
+                if iteration == 1:#this only has to happen once
+                #delete every edge outgoing from nodes in z
+                    for var in z:
+                        childnodes = self.bn.get_children(var)
+                        for child in childnodes:
+                            graph.remove_edge(var, child)  
+                            self.bn.del_edge([var, child])                                          
+            #see if exists a path
+            for subx in x:
+                for suby in y:
+                    if nx.has_path(graph, subx, suby) == False :
+                        return True
+            return False
         #return D-separated == True / False    
     
     def Independence(self, x, y,z):
