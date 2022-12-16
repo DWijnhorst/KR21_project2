@@ -40,18 +40,17 @@ class BNReasoner:
                 #apply factor reduction (zeroing out the instances that are incompatible with e)
                 cpt = self.bn.get_cpt(node)
                 new_cpt = self.bn.reduce_factor(e, cpt)#reduce p to 0                
-                new_cpt = new_cpt.drop(evidence, axis=1)#remove parent from child (no edge anymore)                
-                new_cpt = new_cpt[new_cpt['p'] != 0]#remove row with p=0                
+                new_cpt = new_cpt.drop(evidence, axis=1)#remove parent from child               
+                new_cpt = new_cpt[new_cpt['p'] != 0]#remove rows with p=0                
                 length = len(new_cpt.index.values)#fix row indexes after removing rows
                 new_indexes = []
                 for i in range(0,length):
                     new_indexes.append(i)
                 new_cpt.index = [new_indexes]
-                self.bn.update_cpt(node, new_cpt)            
-                                          
+                self.bn.update_cpt(node, new_cpt)  
         #delete any leaf nodes that do not appear in Q or e (iteratively)
         iteration = 0
-        if len(query_vars) != len(self.bn.get_all_variables()):#MPE check
+        if len(query_vars) != len(self.bn.get_all_variables()):
             while iteration == 0 or LeafNodesPresent >= 1:
                 iteration += 1
                 LeafNodesPresent = 0
@@ -65,7 +64,6 @@ class BNReasoner:
                     if len(children) == 0:                        
                         LeafNodesPresent += 1 
                         self.bn.del_var(var)
-        
         self.bn.draw_structure()
         #return pruned network
     
@@ -208,12 +206,11 @@ class BNReasoner:
             ordering = []
             originalgraph = copy.deepcopy(self.bn.get_interaction_graph())
             originalset_var = set_var
-            nx.draw(originalgraph, with_labels=True, node_size=3000)
+            # nx.draw(originalgraph, with_labels=True, node_size=3000)
             # cycle:
             for i in range(len(originalset_var)):
                 neighbors = dict()
                 fill_value_dict = dict()
-                # originaledges = originalgraph.edges()
                 for var in set_var:
                     neighbors[var] = list(nx.neighbors(originalgraph, var))
                 for i in range(len(set_var)):
@@ -299,10 +296,10 @@ class BNReasoner:
                         rows_false = new_rows_false    
                 if cpt_parent.loc[cpt_parent[elimination_order[i+1]]==True]['p'].size > 0:                    
                     for row in rows_true:
-                        cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], cpt_parent.loc[cpt_parent[elimination_order[i+1]] == True]['p'].tolist())                
+                        cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], cpt_parent.loc[cpt_parent[elimination_order[i+1]] == True]['p'].tolist())[0]              
                 if cpt_parent.loc[cpt_parent[elimination_order[i+1]]==False]['p'].size > 0:
                     for row in rows_false:
-                        cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], cpt_parent.loc[cpt_parent[elimination_order[i+1]] == False]['p'].tolist())
+                        cpt_child['p'][row] = self.Factor_Multiplication([cpt_child.iloc[row]['p']], cpt_parent.loc[cpt_parent[elimination_order[i+1]] == False]['p'].tolist())[0]
                       
                 #sum-out parent from child
                 old_length = int(len(cpt_child.index))
@@ -323,33 +320,40 @@ class BNReasoner:
         #return Pr(x)
         return self.bn.get_cpt(x)['p'][truthvalue]#Pr(x=True)
     
-    def Marginal_Distributions(self, q, e):#possible evidence empty
+    def Marginal_Distributions(self, q, e):
         #reduce factors w.r.t. evidence
         vars = self.bn.get_all_variables()
         for var in vars:
             cpt = self.bn.get_cpt(var)
             column_names = cpt.columns
-            evidence_var = e.index.values.tolist()
-            if evidence_var[0] in column_names:
-                cpt = self.bn.reduce_factor(e, cpt)
-                cpt = cpt[cpt['p'] != 0] 
-                self.bn.update_cpt(var, cpt)                             
-                length = len(cpt.index.values)#fix row indexes after removing rows, hier gaat iets niet goed (,)
-                new_indexes = []
-                for i in range(0,length):
-                    new_indexes.append(i)
-                cpt.index = [new_indexes]             
-                self.bn.update_cpt(var, cpt)                 
+            if e.empty == False:#possible evidence empty
+                evidence_var = e.index.values.tolist()
+                if evidence_var[0] in column_names:
+                    cpt = self.bn.reduce_factor(e, cpt)
+                    cpt = cpt[cpt['p'] != 0] 
+                    self.bn.update_cpt(var, cpt)                             
+                    length = len(cpt.index.values)#fix row indexes after removing rows
+                    new_indexes = []
+                    for i in range(0,length):
+                        new_indexes.append(i)
+                    cpt.index = [new_indexes]             
+                    self.bn.update_cpt(var, cpt)                 
         #compute joint marginal via variable elimination
         PrTrue = self.Variable_Elimination(q, 1)
         PrFalse = self.Variable_Elimination(q, 0)        
         #obtain Pr(evidence)
-        cpt_evidence = self.bn.get_cpt(evidence_var[0])
-        evidenceTrue = cpt_evidence['p']        
+        if e.empty == False:
+            cpt_evidence = self.bn.get_cpt(evidence_var[0])
+            evidenceTrue = cpt_evidence['p']      
+        else:
+            evidenceTrue = 1.0
         #compute Pr(q|e) and Pr(-q|e)
         marginalTrue = PrTrue / evidenceTrue
         marginalFalse = PrFalse / evidenceTrue
-        return (marginalTrue.tolist()[0], marginalFalse.tolist()[0]) 
+        if e.empty == False:
+            return (marginalTrue.tolist()[0], marginalFalse.tolist()[0]) 
+        else:
+            return (marginalTrue, marginalFalse) 
         # return marginal distribution P(q|e)
         
     def MAP(self, q, e):
@@ -392,12 +396,11 @@ class BNReasoner:
                 truth_value = True
             else:
                 truth_value = False
-            assignment = pd.Series({var : truth_value})
+            assignment = (var, truth_value)
             MPE.append(assignment)    
             #update child cpts
             children = self.bn.get_children(var)
             for child in children:
-                # print(f"Child cpt: \n {self.bn.get_cpt(child)}")
                 #apply factor multiplication with max true and max false 
                 cpt_child= self.bn.get_cpt(child)
                 cpt_rows_true = cpt_child.loc[cpt_child[var] == True]
@@ -443,6 +446,7 @@ class main():
     #Init net
     NET = BNReasoner("testing/dog_problem.BIFXML") #initializing network 1  
     NET2 = BNReasoner("testing/lecture_example.BIFXML") #initializing network 2
+    NET_usecase = BNReasoner("testing/Sick.BIFXML") # initializing use-case network
     
     #testing --> uncomment the function you want to test
     # NET.Network_Pruning(["dog-out"], pd.Series({"family-out" : True}) ) 
@@ -453,9 +457,15 @@ class main():
     # print(NET.Factor_Multiplication(NET.Get_CPT('hear-bark')['p'],NET.Get_CPT('light-on')['p']))
     # print(NET.Ordering(NET.Get_Vars(), 'min-degree'))#or "min-fill"
     # print(NET2.Variable_Elimination('Slippery Road?'))
-    # print(NET2.Marginal_Distributions('Slippery Road?', pd.Series({"Winter?" : True})))#vanaf hier moet nog getest worden
+    # print(NET2.Marginal_Distributions('Slippery Road?', pd.Series({"Winter?" : True})))#can also be called on with empty evidence: pd.Series()
     # print(NET2.MAP(['Slippery Road?', "Sprinkler?"], pd.Series({"Winter?" : True})))
     # print(NET2.MPE(NET2.Get_Vars(),pd.Series({"Winter?" : True})))
+    
+    #Use-case queries
+    # print(NET_usecase.Variable_Elimination('Lung cancer'))#prior marginal query
+    # print(NET_usecase.Marginal_Distributions('Lung cancer', pd.Series({"Smoking" : True})))#posterior marginal query
+    # print(NET_usecase.MAP(['Sick', 'Hospital'], pd.Series({"Living in the city" : True})))#MAP
+    # print(NET_usecase.MPE(NET_usecase.Get_Vars(), pd.Series({"Lung cancer" : True})))#MPE
     
 if __name__ == "__main__":
     main()
